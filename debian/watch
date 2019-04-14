@@ -1,3 +1,3 @@
 version=4
 opts=filenamemangle=s/.+\/v?(\d\S+)\.tar\.gz/ledger2beancount-$1\.tar\.gz/ \
-  https://github.com/zacchiro/ledger2beancount/tags .*/v?(\d\S+)\.tar\.gz
+  https://github.com/zacchiro/ledger2beancount/tags .*/?(\d\S+)\.tar\.gz
