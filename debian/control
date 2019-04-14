@@ -2,7 +2,16 @@ Source: ledger2beancount
 Section: utils
 Priority: optional
 Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
-Build-Depends: debhelper-compat (= 12)
+Build-Depends: beancount,
+               debhelper-compat (= 12),
+               ledger,
+               libcarp-assert-perl,
+               libconfig-onion-perl,
+               libdate-calc-perl,
+               libdatetime-format-strptime-perl,
+               libfile-basedir-perl,
+               libgetopt-long-descriptive-perl,
+               libyaml-libyaml-perl
 Standards-Version: 4.3.0
 Vcs-Git: https://salsa.debian.org/jelmer/ledger2beancount
 Vcs-Browser: https://salsa.debian.org/jelmer/ledger2beancount
@@ -10,7 +19,14 @@ Homepage: https://github.com/zacchiro/ledger2beancount
 
 Package: ledger2beancount
 Architecture: all
-Depends: ${misc:Depends}
+Depends: libcarp-assert-perl,
+         libconfig-onion-perl,
+         libdate-calc-perl,
+         libdatetime-format-strptime-perl,
+         libfile-basedir-perl,
+         libgetopt-long-descriptive-perl,
+         libyaml-libyaml-perl,
+         ${misc:Depends}
 Recommends: beancount
 Suggests: ledger
 Description: Convert Ledger-based textual ledgers to Beancount ones
