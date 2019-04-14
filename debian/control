@@ -1,0 +1,22 @@
+Source: ledger2beancount
+Section: utils
+Priority: optional
+Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
+Build-Depends: debhelper-compat (= 12)
+Standards-Version: 4.3.0
+Vcs-Git: https://salsa.debian.org/jelmer/ledger2beancount
+Vcs-Browser: https://salsa.debian.org/jelmer/ledger2beancount
+Homepage: https://github.com/zacchiro/ledger2beancount
+
+Package: ledger2beancount
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: beancount
+Suggests: ledger
+Description: Convert Ledger-based textual ledgers to Beancount ones
+ A script to automatically convert Ledger-based textual ledgers to Beancount
+ ones.
+ .
+ Conversion is based on (concrete) syntax, so that information that is not
+ meaningful for accounting reasons but still valuable (e.g., comments,
+ formatting, etc.) can be preserved.
