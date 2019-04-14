@@ -1,5 +1,12 @@
 # ledger2beancount releases
 
+## 1.6 (2019-03-25)
+
+* Add support for fixated prices and costs
+* Handle account names that contain brackets
+* Don't parse trailing tabs as part of the account name
+* Escape backslashes in the narration
+
 ## 1.5 (2019-01-30)
 
 * Replace commodities in balance assertions

@@ -1,5 +1,0 @@
-ledger2beancount (1.6-1) UNRELEASED; urgency=medium
-
-  * Initial release. (Closes: #927070)
-
- -- Jelmer Vernooĳ <jelmer@debian.org>  Sun, 14 Apr 2019 17:16:54 +0000
