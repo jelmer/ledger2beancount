@@ -1,6 +1,10 @@
 ;----------------------------------------------------------------------
 ; ledger2beancount conversion notes:
+;   - Skipped second account declaration for Expenses:Travel (old Expenses:Bar:Travel)
 ;   - Virtual posting in parentheses ignored
+;   - Account Revenue not allowed; it needs a subaccount, e.g. Revenue:Subaccount
+;   - Non-standard root name Revenue used; please set name_* option
+;   - Account Accrued:Accounts Payable:Baz renamed to Liabilities:Accounts-Payable:Baz
 ;   - Account Assets:Bank Debian)bar renamed to Assets:Bank-Debian-bar
 ;   - Account Assets:Bank [Debian] renamed to Assets:Bank--Debian-
 ;   - Account Assets:test renamed to Assets:Test
@@ -10,24 +14,34 @@
 ;   - Account Expenses:école renamed to Expenses:École
 ;   - Account Liabilities:Credit Card:Test renamed to Liabilities:Credit-Card:Test
 ;   - Account Liabilities:credit Card:test renamed to Liabilities:Credit-Card:Test
+;   - Account Revenue renamed to Revenue:Subaccount
 ;   - Account assets:test renamed to Assets:Test
 ;   - Account expenses:purchase renamed to Expenses:Purchase
 ;   - Collision for account "Assets:Collision": Assets:Coll1, Assets:Coll2
 ;   - Collision for account "Assets:Test": Assets:Test, Assets:test, assets:test
 ;   - Collision for account "Equity:Opening-Balance": Equity:Opening balance, Equity:Opening-Balance
+;   - Collision for account "Expenses:Travel": Expenses:Bar:Travel, Expenses:Foo:Travel
 ;   - Collision for account "Liabilities:Credit-Card:Test": Liabilities:Credit Card:Test, Liabilities:credit Card:test
 ;----------------------------------------------------------------------
 
 
 option "title" "Test account names"
+option "name_income" "Revenue"
 
 1970-01-01 open Assets:A
+1970-01-01 open Assets:Accounts-Receivable:Bar
+1970-01-01 open Assets:Accounts-Receivable:Foo
 1970-01-01 open Assets:Bank
 1970-01-01 open Assets:Bash
 1970-01-01 open Assets:Collision
 1970-01-01 open Assets:MuchLonger
 1970-01-01 open Assets:Short
 1970-01-01 open Expenses:Foo
+1970-01-01 open Liabilities:Accounts-Payable:Baz
+1970-01-01 open Revenue:Foo
+1970-01-01 open Revenue:Interest
+1970-01-01 open Revenue:Salary
+1970-01-01 open Revenue:Subaccount
 1970-01-01 commodity USD
 ; Beancount: 2.1.0
 
@@ -50,6 +64,9 @@ option "title" "Test account names"
 1970-01-01 open Assets:Test:I-Love-Crowns
 1970-01-01 open Assets:Commodity-Test123
 1970-01-01 open Expenses:Purchase
+
+; These accounts lead to name collision
+1970-01-01 open Expenses:Travel
 
 1970-01-01 commodity EUR
 
@@ -299,4 +316,40 @@ option "title" "Test account names"
   Expenses:Foo                      10.00 USD
   Assets:Bank                       -8.00 USD
   Assets:Bank:Debian:Bar            -2.00 USD
+
+2019-03-27 txn "Don't confuse account and amount due to tabs"
+  Assets:Bank 	 -35.00 EUR
+  Expenses:Foo	 35.00 EUR
+
+2019-03-27 txn "Invalid account: root is not valid, needs subaccount"
+  Assets:Bank     42.00 EUR
+  Revenue:Subaccount
+
+2019-03-27 txn "Non-standard root name"
+  Assets:Bank                      100.00 EUR
+  Revenue:Salary                  -100.00 EUR
+
+2019-03-27 txn "Non-standard root name (after mapping)"
+  Assets:Bank                        1.00 EUR
+  Revenue:Interest                  -1.00 EUR
+
+2019-04-06 * "Name collision and account declarations"
+  Expenses:Travel                   11.00 EUR
+  Assets:Bank                      -11.00 EUR
+
+2019-04-06 * "Name collision and account declarations"
+  Expenses:Travel                   22.00 EUR
+  Assets:Bank                      -22.00 EUR
+
+2019-04-17 * "Mass rename of accounts using account_regex"
+  Assets:Accounts-Receivable:Foo    10.00 EUR
+  Revenue:Foo                      -10.00 EUR
+
+2019-04-17 * "Mass rename of accounts using account_regex"
+  Assets:Accounts-Receivable:Bar    10.00 EUR
+  Revenue:Foo                      -10.00 EUR
+
+2019-04-17 * "Mass rename of accounts using account_regex - leads to a name that requires further changes"
+  Liabilities:Accounts-Payable:Baz  10.00 EUR
+  Expenses:Foo                     -10.00 EUR
 

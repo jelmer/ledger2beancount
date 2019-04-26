@@ -1,5 +1,15 @@
 # ledger2beancount releases
 
+## 1.7 (2019-04-22)
+
+* Don't misparse account and commodity with mixed tab/space separators
+* Rename account names consisting of a root name without subaccount
+* Warn when non-standard root names are used
+* Avoid duplicate open directives for accounts with name collisions
+* Don't warn for renamed tags that won't show up in the beancount file
+* Add `account_regex` option to mass rename account names
+* Add man page and improve documentation
+
 ## 1.6 (2019-03-25)
 
 * Add support for fixated prices and costs
