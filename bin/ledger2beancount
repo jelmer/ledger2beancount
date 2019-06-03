@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 # Copyright (C) 2016-2018 Stefano Zacchiroli <zack@upsilon.cc>
 #           (C) 2018-2019 Martin Michlmayr <tbm@cyrius.com>
@@ -12,15 +12,16 @@ use strict;
 use experimental 'smartmatch';
 use utf8;
 use feature 'unicode_strings';
-use open qw(:std :locale);
+use open qw/:std :locale/;
 
 use Carp::Assert;
 use Config::Onion;
-use Date::Calc qw(Add_Delta_Days);
-use DateTime::Format::Strptime qw(strftime);
+use Date::Calc qw/Add_Delta_Days/;
+use DateTime::Format::Strptime qw/strftime/;
 use File::BaseDir qw/config_home/;
 use Getopt::Long::Descriptive;
-use POSIX qw(ceil);
+use POSIX qw/ceil/;
+use String::Interpolate qw(safe_interpolate);
 use Unicode::Normalize;
 
 
@@ -103,6 +104,8 @@ my $price_RE = qr/^P\s+(?<date>$date_RE)\s+(\d\d:\d\d(:\d\d)?\s+)?(?<commodity1>
 
 # Maximum limit for beancount commodities
 my $BEANCOUNT_COMMODITY_MAX_LEN = 24;
+
+my @beancount_root_names = qw/Assets Liabilities Equity Income Expenses/;
 
 my @output; # Used to store the output of the script
 # Store accounts and commodities encountered and declared
@@ -518,9 +521,7 @@ sub pop_txn() {
 # may contain (uppercase or lowercase) letters, numbers, dashes and
 # underscores."
 sub map_metadata($) {
-    my ($key) = @_;
-
-    $ledger_metadata{$key} = 1;
+    my ($key) = my ($ledger_key) = @_;
 
     # For backwards compatibility with older ledger2beancount configs
     $key = $config->{metadata_map}{lc $key} if exists $config->{metadata_map}{lc $key};
@@ -533,6 +534,13 @@ sub map_metadata($) {
     $key =~ s/\p{NonspacingMark}//g;
     $key =~ s/[^a-zA-Z0-9_-]/-/g; # Replace disallowed characters
     $key = $config->{metadata_map}{$key} if exists $config->{metadata_map}{$key};
+
+    # payee_tag and payer_tag don't show up in the beancount file, so
+    # no need to warn about them.
+    if ($key ne $config->{payee_tag} and $key ne $config->{payer_tag}) {
+	$ledger_metadata{$ledger_key} = 1;
+    }
+
     return $key;
 }
 
@@ -558,7 +566,7 @@ sub map_account_apply($) {
 # number and are followed letters, numbers or dash (-) characters. All
 # other characters are disallowed." (Letters and numbers may be UTF-8)
 sub map_account($) {
-    my ($account) = @_;
+    my ($account) = my ($ledger_account) = @_;
 
     if (exists $ledger_alias{$account}) {
 	$account = $ledger_alias{$account};
@@ -568,11 +576,30 @@ sub map_account($) {
 
     $ledger_accounts{$account} = 1;
 
+    # Map accounts according to the config
     $account = $config->{account_map}{$account} if exists $config->{account_map}{$account};
+    foreach $_ (sort keys %{$config->{account_regex}}) {
+	if ($account =~ s/$_/safe_interpolate($config->{account_regex}{$_})/eg) {
+	    $config->{account_map}{$ledger_account} = $account;
+	    last;
+	}
+    }
+
+    # Ensure account names are valid in beancount
     $account =~ s/(^|:)(\p{lower})/$1\U$2\E/g; # Make first letter uppercase
     $account =~ s/:[^\p{letter}\p{number}]/:X/g; # Make sure first character is a letter or number
     $account =~ s/[^\p{letter}\p{number}:-]/-/g; # Replace disallowed characters
     $account = $config->{account_map}{$account} if exists $config->{account_map}{$account};
+    my $root = $1 if $account =~ /([^:]+)/;
+    # beancount doesn't allow just a root account (e.g. Income) as an
+    # account name.  It has to be Income:Subaccount
+    if ($account eq $root) {
+	print_warning_once("Account $account not allowed; it needs a subaccount, e.g. $account:Subaccount");
+	$account .= ":Subaccount";
+    }
+    if (!($root ~~ @beancount_root_names)) {
+	print_warning_once("Non-standard root name $root used; please set name_* option");
+    }
     $account_declared{$account} = undef if not defined $account_declared{$account};
     return $account;
 }
@@ -643,8 +670,8 @@ sub map_commodity($) {
 sub replace_commodity($) {
     my ($s) = @_;
 
-    if ($s =~ /(  |\t)$amount_RE/) {
-	$s =~ s/(  |\t)$amount_RE/$1@{[pp_amount $+{minus}, $+{num}, $+{commodity}, $+{inline_math}]}/;
+    if ($s =~ /(  |\t|\t )$amount_RE/) {
+	$s =~ s/(  |\t|\t )$amount_RE/$1@{[pp_amount $+{minus}, $+{num}, $+{commodity}, $+{inline_math}]}/;
     } elsif ($s =~ /$amount_RE/) {
 	$s =~ s/$amount_RE/@{[pp_amount $+{minus}, $+{num}, $+{commodity}, $+{inline_math}]}/;
     }
@@ -1003,9 +1030,16 @@ while (@input) {
 	    print_comment_top_level $depth, $l;
 	}
     } elsif ($l =~ /^[!@]?account\s+(.*)/) {  # account declaration
-	$account_declared{map_account $1} = 1;
-	print_line $depth, sprintf "$config->{account_open_date} open %s", map_account $1;
+	my $account = map_account $1;
 	@stanza = read_stanza \@input;
+	# Avoid duplicate account declarations if two accounts are mapped
+	# to the same account and both have account declarations.
+	if ($account_declared{$account}) {
+	    print_warning_once "Skipped second account declaration for $account (old $1)";
+	    next;
+	}
+	$account_declared{$account} = 1;
+	print_line $depth, sprintf "$config->{account_open_date} open %s", $account;
 	foreach $l (@stanza) {
 	    ($depth, $l) = strip_indentation $l;
 	    if ($l =~ /^note\s+(.*)/) {  # note

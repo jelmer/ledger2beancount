@@ -45,7 +45,7 @@ metadata_map:
   x-payee: payee
   x-payer: payer
 
-# metadata tags (*after* above mapping) used for specific purposes
+# metadata tags (*after* above mapping) used to set payee
 payee_tag: payee
 payer_tag: payer
 
@@ -66,6 +66,11 @@ payee_match:
 # names.
 account_map:
   "Equity:Opening-balance": Equity:Opening-Balance
+
+# A hash of regular expressions to replace account names.
+account_regex:
+  ^Accrued:Accounts Payable:(.*): Liabilities:Accounts-Payable:$1
+  ^Accrued:Accounts Receivable:(.*): Assets:Accounts-Receivable:$1
 
 # mapping of ledger commodities to valid beancount commodities
 commodity_map:
