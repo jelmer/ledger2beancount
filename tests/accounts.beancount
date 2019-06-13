@@ -1,15 +1,17 @@
 ;----------------------------------------------------------------------
 ; ledger2beancount conversion notes:
+;
 ;   - Skipped second account declaration for Expenses:Travel (old Expenses:Bar:Travel)
 ;   - Virtual posting in parentheses ignored
 ;   - Account Revenue not allowed; it needs a subaccount, e.g. Revenue:Subaccount
-;   - Non-standard root name Revenue used; please set name_* option
+;   - Non-standard root name Revenue used; please set beancount options name_*
 ;   - Account Accrued:Accounts Payable:Baz renamed to Liabilities:Accounts-Payable:Baz
 ;   - Account Assets:Bank Debian)bar renamed to Assets:Bank-Debian-bar
 ;   - Account Assets:Bank [Debian] renamed to Assets:Bank--Debian-
 ;   - Account Assets:test renamed to Assets:Test
 ;   - Account Assets:♚_DASD!;?@#$!%^& *"(*(0-;♚ds renamed to Assets:X-DASD----------------0---ds
 ;   - Account Assets:♚foo:♚bar renamed to Assets:Xfoo:Xbar
+;   - Account Expenses:Baz: renamed to Expenses:Baz
 ;   - Account Expenses:École républicaine renamed to Expenses:École-républicaine
 ;   - Account Expenses:école renamed to Expenses:École
 ;   - Account Liabilities:Credit Card:Test renamed to Liabilities:Credit-Card:Test
@@ -17,11 +19,11 @@
 ;   - Account Revenue renamed to Revenue:Subaccount
 ;   - Account assets:test renamed to Assets:Test
 ;   - Account expenses:purchase renamed to Expenses:Purchase
-;   - Collision for account "Assets:Collision": Assets:Coll1, Assets:Coll2
-;   - Collision for account "Assets:Test": Assets:Test, Assets:test, assets:test
-;   - Collision for account "Equity:Opening-Balance": Equity:Opening balance, Equity:Opening-Balance
-;   - Collision for account "Expenses:Travel": Expenses:Bar:Travel, Expenses:Foo:Travel
-;   - Collision for account "Liabilities:Credit-Card:Test": Liabilities:Credit Card:Test, Liabilities:credit Card:test
+;   - Collision for account Assets:Collision: Assets:Coll1, Assets:Coll2
+;   - Collision for account Assets:Test: Assets:Test, Assets:test, assets:test
+;   - Collision for account Equity:Opening-Balance: Equity:Opening balance, Equity:Opening-Balance
+;   - Collision for account Expenses:Travel: Expenses:Bar:Travel, Expenses:Foo:Travel
+;   - Collision for account Liabilities:Credit-Card:Test: Liabilities:Credit Card:Test, Liabilities:credit Card:test
 ;----------------------------------------------------------------------
 
 
@@ -29,15 +31,20 @@ option "title" "Test account names"
 option "name_income" "Revenue"
 
 1970-01-01 open Assets:A
+1970-01-01 open Assets:Aaa
 1970-01-01 open Assets:Accounts-Receivable:Bar
 1970-01-01 open Assets:Accounts-Receivable:Foo
 1970-01-01 open Assets:Bank
 1970-01-01 open Assets:Bash
+1970-01-01 open Assets:Bbb
 1970-01-01 open Assets:Collision
 1970-01-01 open Assets:MuchLonger
 1970-01-01 open Assets:Short
+1970-01-01 open Equity:Trading:Currency
+1970-01-01 open Expenses:Baz
 1970-01-01 open Expenses:Foo
 1970-01-01 open Liabilities:Accounts-Payable:Baz
+1970-01-01 open Liabilities:MasterCard
 1970-01-01 open Revenue:Foo
 1970-01-01 open Revenue:Interest
 1970-01-01 open Revenue:Salary
@@ -352,4 +359,20 @@ option "name_income" "Revenue"
 2019-04-17 * "Mass rename of accounts using account_regex - leads to a name that requires further changes"
   Liabilities:Accounts-Payable:Baz  10.00 EUR
   Expenses:Foo                     -10.00 EUR
+
+2019-04-27 * "Rename account to something which contains original account name"
+  Assets:Bank                       10.00 EUR
+  Equity:Trading:Currency          -10.00 EUR
+
+2019-04-28 * "Account name with only one letter"
+  Assets:Aaa                        10.00 EUR
+  Assets:Bbb
+
+2019-04-28 txn "Deferred account"
+  Liabilities:MasterCard           150.00 EUR
+  Assets:Bank                     -150.00 EUR
+
+2019-04-29 * "Strange but legal name in ledger - illegal in beancount"
+  Expenses:Baz                     100.00 EUR
+  Assets:Bank                     -100.00 EUR
 

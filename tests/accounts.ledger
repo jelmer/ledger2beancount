@@ -314,3 +314,19 @@ account Assets:Bank Debian]bar
     Accrued:Accounts Payable:Baz      10.00 EUR
     Expenses:Foo                     -10.00 EUR
 
+2019-04-27 * Rename account to something which contains original account name
+    Assets:Bank                       10.00 EUR
+    Trading:Currency                 -10.00 EUR
+
+2019-04-28 * Account name with only one letter
+    A                                 10.00 EUR
+    B
+
+2019-04-28 Deferred account
+    Liabilities:MasterCard           150.00 EUR
+    <Assets:Bank>                   -150.00 EUR
+
+2019-04-29 * Strange but legal name in ledger - illegal in beancount
+    Expenses:Baz:                    100.00 EUR
+    Assets:Bank                     -100.00 EUR
+

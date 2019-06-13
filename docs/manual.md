@@ -5,7 +5,7 @@ author:
     - Stefano Zacchiroli
     - Martin Michlmayr
 keywords: ledger, beancount, conversion, accounting, bookkeeping
-date: April 2019
+date: June 2019
 documentclass: scrartcl
 urlcolor: blue
 toc: true
@@ -30,7 +30,6 @@ beancount.
 ledger2beancount is a Perl script and relies on the following Perl
 modules:
 
-* Carp::Assert
 * Config::Onion
 * Date::Calc
 * DateTime::Format::Strptime
@@ -46,11 +45,13 @@ You can install the required Perl modules with
 
 If you use Debian, you can install the dependencies with this command:
 
-    sudo apt install libcarp-assert-perl libconfig-onion-perl \
-        libdate-calc-perl libfile-basedir-perl libyaml-libyaml-perl \
-        libgetopt-long-descriptive-perl libdatetime-format-strptime-perl
+    sudo apt install libconfig-onion-perl libdate-calc-perl \
+        libfile-basedir-perl libyaml-libyaml-perl \
+        libgetopt-long-descriptive-perl libdatetime-format-strptime-perl \
+        libstring-interpolate-perl
 
-Note that String::Interpolate is currently not packaged for Debian.
+Note that String::Interpolate (libstring-interpolate-perl) is not in
+Debian stable.
 
 ledger2beancount itself consists of one script.  You can clone the
 repository and run the script directly or copy it to `$HOME/bin` or
@@ -275,6 +276,9 @@ ledger commodities), stripping quoted commodities, making the commodity
 uppercase and limiting it to 24 characters.  Furthermore, the first
 character will be replaced with an `X` if it's not a letter and the
 same will be done for the last character if it's not a letter or digit.
+Finally, all beancount commodities currently have to consist of at least
+two characters ([issue
+192](https://bitbucket.org/blais/beancount/issues/192)).
 
 If you require a mapping between ledger and beancount commodities, you
 can use `commodity_map`.  You can use your ledger commodity names or
@@ -302,9 +306,9 @@ all dates in the format `YYYY-MM-DD` (ISO 8601).  The variable
 your ledger file.  `date_format` uses the same format as the ledger
 options `--input-date-format` and `--date-format` (see `man 1 date`).
 
-Ledger allows dates without a year if the year is declared using the `Y`
-or `year` directive.  If `date_format_no_year` is set, ledger2beancount
-can convert such dates to `YYYY-MM-DD`.
+Ledger allows dates without a year if the year is declared using the
+`Y`, `year` and `apply year` directives.  If `date_format_no_year` is
+set, ledger2beancount can convert such dates to `YYYY-MM-DD`.
 
 Posting-level dates are recognized by ledger2beancount and stored as
 metadata according to the `postdate_tag` (`date` by default) but this

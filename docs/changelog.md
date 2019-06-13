@@ -1,5 +1,26 @@
 # ledger2beancount releases
 
+## 1.8 (2019-06-12)
+
+* Add support for `apply year`
+* Fix incorrect account mapping of certain accounts
+* Handle fixated commodity and postings without amount
+* Improve behaviour for invalid `end` without `apply`
+* Improve error message when date can't be parsed
+* Deal with account names consisting of a single letter
+* Ensure account names don't end with a colon
+* Skip ledger directives `eval`, `python`, and `value`
+* Don't assume all filenames for `include` end in `.ledger`
+* Support `price` directives with commodity symbols
+* Support decimal commas in `price` directives
+* Don't misparse balance assignment as commodity
+* Ensure all beancount commodities have at least 2 characters
+* Ensure all beancount metadata keys have at least 2 characters
+* Don't misparse certain metadata as implicit conversion
+* Avoid duplicate `commodity` directives for commodities with name collisions
+* Recognise deferred postings
+* Recognise `def` directive
+
 ## 1.7 (2019-04-22)
 
 * Don't misparse account and commodity with mixed tab/space separators

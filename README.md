@@ -61,7 +61,7 @@ Please refer to [the manual](docs/manual.md#features) for more details.
 * Directives
   * `bucket` / `A`
   * `include`
-  * `Year` / `Y`
+  * `Year` / `Y`, `apply year`
 * Flags
   * State flags (posting flags)
   * Transaction state (transaction flags)
@@ -89,9 +89,13 @@ Please refer to [the manual](docs/manual.md#features) for more details.
   * Dates on posting-level (no equivalence in beancount)
   * Auxiliary dates (no equivalence in beancount)
   * Effective dates (no equivalence in beancount)
+* Deferred postings (no equivalence in beancount)
 * Directives
+  * `eval`: skipped (not supported in beancount)
   * `payee`: skipped (not needed in beancount)
+  * `python`: skipped (not supported in beancount)
   * `tag`: skipped (not needed in beancount)
+  * `value`: skipped (not supported in beancount)
 * Fixated prices (`=$10` and the `fixed` directive)
 * Tags and links on posting-level (not supported by beancount)
 * Transaction codes: stored as metadata (no equivalence in beancount)
@@ -106,7 +110,7 @@ Please refer to [the manual](docs/manual.md#features) for more details.
   * `C` (commodity equivalences)
   * `check`
   * `D`
-  * `define`
+  * `define` and `def`
   * `expr`
   * `N`
   * Timeclock (`I`, `i`, `O`, `o`, `b`, `h`)
