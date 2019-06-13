@@ -2,6 +2,7 @@ ledger2beancount (1.8-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Drop unnecessary dependency on libcarp-assert-perl.
+  * Set upstream metadata fields: Contact.
 
  -- Jelmer Vernooĳ <jelmer@debian.org>  Thu, 13 Jun 2019 23:04:00 +0000
 
