@@ -5,7 +5,6 @@ Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
 Build-Depends: beancount,
                debhelper-compat (= 12),
                ledger,
-               libcarp-assert-perl,
                libconfig-onion-perl,
                libdate-calc-perl,
                libdatetime-format-strptime-perl,
@@ -23,8 +22,7 @@ Homepage: https://github.com/zacchiro/ledger2beancount
 
 Package: ledger2beancount
 Architecture: all
-Depends: libcarp-assert-perl,
-         libconfig-onion-perl,
+Depends: libconfig-onion-perl,
          libdate-calc-perl,
          libdatetime-format-strptime-perl,
          libfile-basedir-perl,

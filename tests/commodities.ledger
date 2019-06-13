@@ -10,6 +10,12 @@ commodity AnotherAnotherAnotherAnother
 @commodity Chase
 !commodity "DE0002635307"
 
+commodity $
+    value 0.90 EUR
+
+commodity USD
+    alias FOO
+
 commodity EUR
     note Euro
     format 1000.00EUR
@@ -121,5 +127,13 @@ commodity M♛O
 
 2018-03-29 * Mapping creating collision
     Assets:Test                          1 COLLB
+    Equity:Opening-Balance
+
+2018-04-28 * Commodity with only 1 letter
+    Assets:Test                              1 C
+    Equity:Opening-Balance
+
+2018-04-28 * Commodity with only 1 letter
+    Assets:Test                              1 ♛
     Equity:Opening-Balance
 
