@@ -15,7 +15,7 @@ Build-Depends: beancount,
                scdoc,
                pandoc,
                texlive-latex-recommended, lmodern, texlive-fonts-recommended
-Standards-Version: 4.3.0
+Standards-Version: 4.4.0
 Vcs-Git: https://salsa.debian.org/jelmer/ledger2beancount.git
 Vcs-Browser: https://salsa.debian.org/jelmer/ledger2beancount
 Homepage: https://github.com/zacchiro/ledger2beancount
