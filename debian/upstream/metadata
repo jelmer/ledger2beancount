@@ -1,3 +1,5 @@
 Name: ledger2beancount
-Repository: https://github.com/zacchiro/ledger2beancount
+Repository: https://github.com/zacchiro/ledger2beancount.git
 Contact: Stefano Zacchiroli <zack@upsilon.cc>
+Bug-Database: https://github.com/zacchiro/ledger2beancount/issues
+Repository-Browse: https://github.com/zacchiro/ledger2beancount
