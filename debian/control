@@ -14,7 +14,8 @@ Build-Depends: beancount,
                libstring-interpolate-perl,
                scdoc,
                pandoc,
-               texlive-latex-recommended, lmodern, texlive-fonts-recommended
+               texlive-latex-recommended, lmodern, texlive-fonts-recommended,
+               texlive-latex-extra
 Rules-Requires-Root: no
 Standards-Version: 4.4.1
 Vcs-Git: https://salsa.debian.org/jelmer/ledger2beancount.git

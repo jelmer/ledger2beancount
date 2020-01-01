@@ -1,8 +1,12 @@
 ledger2beancount (1.8-2) UNRELEASED; urgency=medium
 
+  [ Jelmer Vernooĳ ]
+  * Add missing build-dependency on texlive-latex-extra.
   * Add patch disable-python to disable Python directives in tests,
     since ledger in unstable no longer supports Python. Closes: #947904
   * Set Rules-Requires-Root.
+
+  [ Debian Janitor ]
   * Set upstream metadata fields: Bug-Database, Repository, Repository-
     Browse.
   * Remove obsolete fields Contact, Name from debian/upstream/metadata
