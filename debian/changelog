@@ -2,6 +2,7 @@ ledger2beancount (1.8-2) UNRELEASED; urgency=medium
 
   * Add patch disable-python to disable Python directives in tests,
     since ledger in unstable no longer supports Python. Closes: #947904
+  * Set Rules-Requires-Root.
 
  -- Jelmer Vernooĳ <jelmer@debian.org>  Wed, 01 Jan 2020 22:39:01 +0000
 
