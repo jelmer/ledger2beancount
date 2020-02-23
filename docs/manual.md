@@ -5,7 +5,7 @@ author:
     - Stefano Zacchiroli
     - Martin Michlmayr
 keywords: ledger, beancount, conversion, accounting, bookkeeping
-date: June 2019
+date: February 2020
 documentclass: scrartcl
 urlcolor: blue
 toc: true
@@ -142,6 +142,10 @@ conversion or if you get an error message from ledger2beancount, please
 [file a bug](https://github.com/zacchiro/ledger2beancount/issues) along
 with a simple test case.
 
+You can pipe the output of ledger2beancount to beancount's bean-format
+if you want to use the conversion as an opportunity to reformat your
+file.
+
 
 # Beancount compatibility
 
@@ -259,6 +263,14 @@ amounts are converted not to use comma as the decimal separator.
 
 Commas as separators for thousands (e.g. `1,000,000`) are supported by
 beancount.
+
+Ledger allows amounts without commodities, e.g.:
+
+    Assets:Test                         10.00
+
+While this is allowed in ledger (but not in beancount), it's not
+recommended and ledger2beancount does not support amounts without
+commodities.  Please add a commodity before using ledger2beancount.
 
 
 ## Commodities

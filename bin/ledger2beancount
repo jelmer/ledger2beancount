@@ -2,6 +2,7 @@
 
 # Copyright (C) 2016-2018 Stefano Zacchiroli <zack@upsilon.cc>
 #           (C) 2018-2019 Martin Michlmayr <tbm@cyrius.com>
+#           (C) 2020 Software in the Public Interest, Inc.
 # License: GNU General Public License (GPL), version 3 or above
 
 # convert a ledger-cli main ledger file to beancount format
@@ -96,7 +97,7 @@ my $amount_mcn_RE = qr/(?<minus>-?)(?<commodity>$commodity_RE)\s*(?<num>$value_e
 my $amount_RE = qr/(?<inline_math>\(?)($amount_mnc_RE|$amount_cmn_RE|$amount_mcn_RE)(\)?)/;
 my $comment_top_level_RE = qr/[;#%|*]\s?(?<comment>.*?)/;
 my $comment_RE = qr/;\s*(?<comment>.*)/;
-my $metadata_RE = qr/;\s*(?<key>[^\h:][^\h]*?):(?<typed>:)?\s+(?<value>.*)/;
+my $metadata_RE = qr/;\s*(?<key>[^\h:][^\h]*?):(?<typed>:)?(\s*$|\s+(?<value>.*))/;
 my $hledger_metadata_RE = qr/(?<key>[^:]+):\s*(?<value>.+)/;
 my $posting_RE = qr/(?<posting>((?<flag>$flags_RE)\s+)?(?<account>$account_RE)(  | \t|\t|\s*$)\s*(?<amount>$amount_RE)?(?<datestrip>\s*;\s*\[(?<postdate>$date_RE)?(=(?<auxdate>$date_RE))?\])?)/;
 my $price_RE = qr/^P\s+(?<date>$date_RE)\s+(\d\d:\d\d(:\d\d)?\s+)?(?<commodity1>$commodity_RE)\s+(?<commodity2>.*)/;
@@ -417,11 +418,12 @@ sub handle_metadata($$$) {
 	if (lc $key ~~ [ map lc $_, @{$config->{link_tags}} ] && !$in_postings) {
 	    print_tags $depth, "^$metadata->{value}";
 	} else {
-	    my $value;
+	    # Metadata values can be empty
+	    my $value = $metadata->{value} ? $metadata->{value} : "";
 	    if (defined($metadata->{typed})) {
-		$value = parse_ledger_value $metadata->{value};
+		$value = parse_ledger_value $value;
 	    } else {
-		$value = mk_beancount_string $metadata->{value};
+		$value = mk_beancount_string $value;
 	    }
 	    if ($defer) {
 		push @cur_txn_meta, pp_metadata($key, $value);
@@ -902,9 +904,21 @@ sub process_txn(@) {
 	}
     }
     print_tags 2, @cur_txn_tags;
-    if ($total_postings == 1 && defined $ledger_bucket) {
-	# We only saw one posting and a ledger bucket is defined
-	push_line 1, map_account $ledger_bucket;
+    if ($total_postings == 1) {
+	if (defined $ledger_bucket) {
+	    # We only saw one posting and a ledger bucket is defined
+	    push_line 1, map_account $ledger_bucket;
+	} else {
+	    # Transactions can have a single posting as long as the
+	    # amount is 0 (otherwise it would fail to balance).  This
+	    # can be used to add standalone balance assertions.
+	    # In theory, we should check that the amount == 0, but
+	    # the transaction would fail to balance in ledger if
+	    # that wasn't the case.
+	    print_line 0, pp_cur_assertions if @cur_txn_assertions;
+	    pop_txn();
+	    return;
+	}
     } elsif ($total_postings == 2 && $postings_with_amount == 2) {
 	# Handle implicit conversions.  We only support simple implicit
 	# conversions with 2 postings.
@@ -984,6 +998,8 @@ while (@input) {
 	if ($l =~ /^\|\s?(?<comment>.*)/) {
 	    print_comment_top_level $depth, $+{comment};
 	} else {
+	    # Rewrite the Emacs modeline
+	    $l =~ s/-\*- ledger -\*-/-*- mode: beancount -*-/;
 	    print_line $depth, $l;
 	}
     } elsif ($l =~ /^[!@]?(?<type>alias)\s+(?<account>$account_RE)\s*=\s*(?<val>.*)/) {  # alias
@@ -1064,7 +1080,19 @@ while (@input) {
 	    print_comment_top_level $depth, $l;
 	}
     } elsif ($l =~ /^[!@]?account\s+(.*)/) {  # account declaration
-	my $account = map_account $1;
+	my ($account, $comment);
+	# account foo ; bar
+	# In ledger, this is parsed as account "foo ; bar"; in hledger as
+	# account "foo" with comment "bar".
+	# If there are two spaces, ledger will also parse it part of the
+	# account name, but such an account name is invalid so treat it
+	# as a comment.
+	if ($config->{hledger}) {
+	    ($account, $comment) = split /\s*;\s*/, $1, 2;
+	} else {
+	    ($account, $comment) = split /\s\s+;\s*/, $1, 2;
+	}
+	$account = map_account $account;
 	@stanza = read_stanza \@input;
 	# Avoid duplicate account declarations if two accounts are mapped
 	# to the same account and both have account declarations.
@@ -1073,7 +1101,7 @@ while (@input) {
 	    next;
 	}
 	$account_declared{$account} = 1;
-	print_line $depth, sprintf "$config->{account_open_date} open %s", $account;
+	print_line $depth, sprintf "$config->{account_open_date} open %s%s", $account, $comment ? " ; $comment" : "";
 	foreach $l (@stanza) {
 	    ($depth, $l) = strip_indentation $l;
 	    if ($l =~ /^note\s+(.*)/) {  # note
@@ -1085,7 +1113,15 @@ while (@input) {
 	    }
 	}
     } elsif ($l =~ /^[!@]?commodity\s+(.*)/) {  # commodity declaration
-	my $commodity = map_commodity $1;
+	my ($commodity, $comment);
+	$commodity = $1;
+	if ($commodity =~ /^(".*")(.*)/) {
+	    $commodity = $1;
+	    $comment = $1 if $2 =~ /\s*;\s*(.*)/;
+	} else {
+	    ($commodity, $comment) = split /\s*;\s*/, $commodity, 2;
+	}
+	$commodity = map_commodity $commodity;
 	@stanza = read_stanza \@input;
 	# Avoid duplicate commodity declarations if two commodities are
 	# mapped to the same commodity and both have commodity declarations.
@@ -1094,7 +1130,7 @@ while (@input) {
 	    next;
 	}
 	$commodity_declared{$commodity} = 1;
-	print_line $depth, sprintf "$config->{commodities_date} commodity $commodity";
+	print_line $depth, sprintf "$config->{commodities_date} commodity %s%s", $commodity, $comment ? " ; $comment" : "";
 	foreach $l (@stanza) {
 	    ($depth, $l) = strip_indentation $l;
 	    if ($l =~ /^note\s+(.*)/) {  # note
