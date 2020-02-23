@@ -1,9 +1,9 @@
-ledger2beancount (2.0-1) UNRELEASED; urgency=medium
+ledger2beancount (2.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Bump standards version to 4.5.0 (no changes).
 
- -- Jelmer Vernooĳ <jelmer@debian.org>  Sun, 23 Feb 2020 01:56:04 +0000
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Sun, 23 Feb 2020 01:57:34 +0000
 
 ledger2beancount (1.8-2) unstable; urgency=medium
 
