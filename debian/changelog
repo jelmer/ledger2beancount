@@ -1,8 +1,8 @@
-ledger2beancount (2.1-1) UNRELEASED; urgency=medium
+ledger2beancount (2.1-1) unstable; urgency=medium
 
   * New upstream release.
 
- -- Jelmer Vernooĳ <jelmer@debian.org>  Mon, 06 Apr 2020 12:03:57 +0000
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Mon, 06 Apr 2020 14:03:06 +0000
 
 ledger2beancount (2.0-1) unstable; urgency=medium
 
