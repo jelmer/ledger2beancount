@@ -5,15 +5,9 @@
 ;   - Account Expenses:Food and drink renamed to Expenses:Food-and-drink
 ;----------------------------------------------------------------------
 
-1970-01-01 open Assets:Cash
-1970-01-01 open Assets:Wallet
-1970-01-01 open Assets:Wallet-cash
-1970-01-01 open Equity:Adjustments
-1970-01-01 open Expenses:Drinks
-1970-01-01 open Expenses:Food
-1970-01-01 open Expenses:Food-and-drink
-1970-01-01 open Expenses:Tips
-1970-01-01 commodity THB
+; SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
+;
+; SPDX-License-Identifier: GPL-3.0-or-later
 
 1970-01-01 open Assets:Test
 1970-01-01 open Assets:Test2
@@ -29,6 +23,17 @@
 
 1970-01-01 commodity EUR
 1970-01-01 commodity USD
+
+1970-01-01 open Assets:Cash
+1970-01-01 open Assets:Wallet
+1970-01-01 open Assets:Wallet-cash
+1970-01-01 open Equity:Adjustments
+1970-01-01 open Expenses:Drinks
+1970-01-01 open Expenses:Food
+1970-01-01 open Expenses:Food-and-drink
+1970-01-01 open Expenses:Tips
+
+1970-01-01 commodity THB
 
 2018-03-23 * "Test 1"
   Assets:Test                        10.00 EUR
@@ -112,8 +117,11 @@
   Assets:Test7                       20.00 EUR
   Equity:Opening-Balance            -20.00 EUR
 
-2020-02-16 balance Assets:Test7  20.00 EUR
+2020-02-15 * "Balance assertion with 0 value"
+  Assets:Test7                        0.00 EUR
+  Assets:Test7
 
+2020-02-16 balance Assets:Test7  20.00 EUR
 
 2020-02-15 txn "Specify amount"
   Assets:Test8                       30.00 EUR

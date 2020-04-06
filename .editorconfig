@@ -1,5 +1,9 @@
 # EditorConfig: http://EditorConfig.org
 
+# SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # top-most EditorConfig file
 root = true
 
@@ -37,9 +41,6 @@ trim_trailing_whitespace = false
 trim_trailing_whitespace = false
 
 [tests/metadata.ledger]
-trim_trailing_whitespace = false
-
-[tests/metadata.beancount]
 trim_trailing_whitespace = false
 
 [tests/spacing.ledger]

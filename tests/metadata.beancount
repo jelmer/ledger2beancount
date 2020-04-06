@@ -15,6 +15,9 @@
 ;----------------------------------------------------------------------
 
 ; Beancount: 2.1.0
+; SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
+;
+; SPDX-License-Identifier: GPL-3.0-or-later
 
 1970-01-01 open Assets:Test
 1970-01-01 open Equity:Opening-Balance
@@ -29,7 +32,7 @@
 
 2018-03-19 * "Metadata after posting, no amount"
   test: "foo bar baz"
-  Assets:Test          
+  Assets:Test
     test: "foo"
   Equity:Opening-Balance            -10.00 EUR
 
@@ -132,7 +135,7 @@
 
 2019-01-28 * "Metadata on null posting"
   Assets:Test                         10.00 EUR
-  Assets:Test               
+  Assets:Test
     foo: "bar"
 
 2019-04-29 * "Metadata key with one letter"

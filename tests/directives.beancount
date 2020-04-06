@@ -17,6 +17,12 @@
 ;   - The `def` directive is not supported
 ;----------------------------------------------------------------------
 
+; Beancount: 2.1.0
+; SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
+;
+; SPDX-License-Identifier: GPL-3.0-or-later
+
+
 1970-01-01 open Assets:Another:Alias
 1970-01-01 open Assets:Checking
 1970-01-01 open Assets:GG
@@ -30,9 +36,8 @@
 1970-01-01 open Assets:Test1:Test2:XXX:AA
 1970-01-01 open Assets:What:A:Long:Name
 1970-01-01 open Equity:Opening-Balance
-1970-01-01 commodity EUR
-; Beancount: 2.1.0
 
+1970-01-01 commodity EUR
 
 1970-01-01 txn "open Assets:Test"
 
