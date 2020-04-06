@@ -1,9 +1,10 @@
 #!/usr/bin/env perl
 
-# Copyright (C) 2016-2018 Stefano Zacchiroli <zack@upsilon.cc>
-#           (C) 2018-2019 Martin Michlmayr <tbm@cyrius.com>
-#           (C) 2020 Software in the Public Interest, Inc.
-# License: GNU General Public License (GPL), version 3 or above
+# SPDX-FileCopyrightText: © 2016 Stefano Zacchiroli <zack@upsilon.cc>
+# SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
+# SPDX-FileCopyrightText: © 2020 Software in the Public Interest, Inc.
+
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 # convert a ledger-cli main ledger file to beancount format
 
@@ -99,7 +100,7 @@ my $comment_top_level_RE = qr/[;#%|*]\s?(?<comment>.*?)/;
 my $comment_RE = qr/;\s*(?<comment>.*)/;
 my $metadata_RE = qr/;\s*(?<key>[^\h:][^\h]*?):(?<typed>:)?(\s*$|\s+(?<value>.*))/;
 my $hledger_metadata_RE = qr/(?<key>[^:]+):\s*(?<value>.+)/;
-my $posting_RE = qr/(?<posting>((?<flag>$flags_RE)\s+)?(?<account>$account_RE)(  | \t|\t|\s*$)\s*(?<amount>$amount_RE)?(?<datestrip>\s*;\s*\[(?<postdate>$date_RE)?(=(?<auxdate>$date_RE))?\])?)/;
+my $posting_RE = qr/(?<posting>((?<flag>$flags_RE)\s+)?(?<account>$account_RE)(  | \t|\t|\s*$)\s*(?<amount>$amount_RE)?)$comment_RE?/;
 my $price_RE = qr/^P\s+(?<date>$date_RE)\s+(\d\d:\d\d(:\d\d)?\s+)?(?<commodity1>$commodity_RE)\s+(?<commodity2>.*)/;
 
 # Maximum limit for beancount commodities
@@ -107,7 +108,9 @@ my $BEANCOUNT_COMMODITY_MAX_LEN = 24;
 
 my @beancount_root_names = qw/Assets Liabilities Equity Income Expenses/;
 
-my @output; # Used to store the output of the script
+my @pre_output; # Used to store output of the script before automatic declarations
+my @output; # Used to store the output of the script after automatic declarations
+my $after_auto = 0;
 # Store accounts and commodities encountered and declared
 # value == undef: seen
 # value == 1: declared
@@ -686,11 +689,20 @@ sub replace_commodity($) {
     return $s;
 }
 
+sub get_output() {
+    if (!$after_auto) {
+	return \@pre_output;
+    } else {
+	return \@output;
+    }
+}
+
 # emit a single line
 sub print_line($$) {
     my ($depth, $line) = @_;
 
-    push @output, indent($depth, $line), "\n";
+    my $out = get_output;
+    push @$out, indent($depth, $line), "\n";
 }
 
 
@@ -699,10 +711,11 @@ sub print_line($$) {
 sub print_comment_top_level($$) {
     my ($depth, $comment) = @_;
 
+    my $out = get_output;
     if (!$comment) {
-	push @output, ";\n";
+	push @$out, ";\n";
     } else {
-	push @output, "; ", indent($depth, $comment), "\n";
+	push @$out, "; ", indent($depth, $comment), "\n";
     }
 }
 
@@ -772,6 +785,7 @@ sub process_txn(@) {
 	}
     }
 
+    my $has_amount;
     foreach my $l (@txn) {
 	# print "D: line: ", "\n"; dump_cur_txn(); print "\n";
 
@@ -802,11 +816,9 @@ sub process_txn(@) {
 		    $l =~ s/\Q<$account>\E/$account  /;
 	    }
 	    $in_postings = 1;
-	    my $postdate = $+{postdate};
-	    my $auxdate = $+{auxdate};
-	    my $has_amount = $+{amount} ? 1 : 0;
-	    # Strip the auxdate info
-	    $l =~ s/\s*\Q$+{datestrip}\E// if $+{datestrip};
+	    my $postdate;
+	    my $auxdate;
+	    $has_amount = $+{amount} ? 1 : 0;
 
 	    $l = replace_account $l;
 
@@ -864,8 +876,21 @@ sub process_txn(@) {
 		    }
 		}
 		if ($+{comment}) {
+		    # Ideally, handling of postdates and auxdates would be
+		    # done in handle_comment but this is difficult because
+		    # push_deferred_meta has to be called before push_metadata
+		    # of postdate and auxdate.
+		    $+{comment} =~ /(^\s*\[(?<postdate>$date_RE)?(=(?<auxdate>$date_RE))?\])?(\s*;?\s*(?<comment>.*))/;
+		    $auxdate = $+{auxdate};
+		    $postdate = $+{postdate};
 		    my $comment = handle_comment $depth, "; $+{comment}", 1;
-		    $l .= " ; $comment" if $comment;
+		    if ($comment) {
+			$l .= " ; $comment" if $comment;
+		    } else {
+			# We removed all comments so strip trailing whitespace
+			# in case there's an account with no amount
+			$l =~ s/\s+$//;
+		    }
 		}
 		if ($+{assertion}) {
 		    push_assertion $+{account}, replace_commodity $+{assertion};
@@ -915,9 +940,18 @@ sub process_txn(@) {
 	    # In theory, we should check that the amount == 0, but
 	    # the transaction would fail to balance in ledger if
 	    # that wasn't the case.
-	    print_line 0, pp_cur_assertions if @cur_txn_assertions;
-	    pop_txn();
-	    return;
+	    # If there's an amount (it has to be zero), print
+	    # the transaction (using a second posting with the
+	    # same account name) because it might contain an
+	    # interesting narration.  If there's no amount,
+	    # just use the balance assertion.
+	    if ($has_amount) {
+		push_line 1, map_account $accounts[0];
+	    } else {
+		print_line 0, pp_cur_assertions if @cur_txn_assertions;
+		pop_txn();
+		return;
+	    }
 	}
     } elsif ($total_postings == 2 && $postings_with_amount == 2) {
 	# Handle implicit conversions.  We only support simple implicit
@@ -980,6 +1014,7 @@ while (@input) {
     } elsif ($config->{ignore_marker} && $l =~ /;\s*:?$config->{ignore_marker}/) {
 	next;
     } elsif ($config->{keep_marker} && $l =~ /;\s*:?$config->{keep_marker}\s+begin/) {
+	$after_auto = 1;
 	$l = shift @input;
 	do {
 	    if ($l =~ /^$comment_top_level_RE$/) {
@@ -1005,10 +1040,13 @@ while (@input) {
     } elsif ($l =~ /^[!@]?(?<type>alias)\s+(?<account>$account_RE)\s*=\s*(?<val>.*)/) {  # alias
 	$ledger_alias{$+{account}} = map_account_apply $+{val};
     } elsif ($l =~ /^[!@]?apply\s+(?<type>account)\s+(?<val>.*)/) {  # apply account
+	$after_auto = 1;
 	push @ledger_apply, [$+{type}, $+{val}];
     } elsif ($l =~ /^[!@]?apply\s+(?<type>fixed)\s+(?<val>.*)/) {  # apply fixed
+	$after_auto = 1;
 	push @ledger_apply, [$+{type}, $+{val}];
     } elsif ($l =~ /^[!@]?apply\s+(?<type>tag)\s+(?<val>.*)/) {  # apply tag
+	$after_auto = 1;
 	# `apply tag` can be converted to beancount in three ways:
 	# * using pushtag/poptag for tags
 	# * applying links to each transactions
@@ -1022,6 +1060,7 @@ while (@input) {
 	    push @ledger_apply, [$+{type}, $+{val}];
 	}
     } elsif ($l =~ /^[!@]?apply\s+(?<type>year)\s+(?<val>\d+)/) {  # apply year
+	$after_auto = 1;
 	$year = $+{val};
 	push @ledger_apply, [$+{type}, $+{val}];
     } elsif ($l =~ /^[!@]?apply\s+.*/) {  # apply .*
@@ -1063,6 +1102,7 @@ while (@input) {
     } elsif ($l =~ /^(Y\s*|year\s+)(\d{4})/) {  # year declaration
 	$year = $2;
     } elsif ($l =~ /^$price_RE/) {
+	$after_auto = 1;
 	$l = sprintf "%s price %s ", pp_date($+{date}, $year), map_commodity $+{commodity1};
 	if ($+{commodity2} =~ /$amount_RE/) {
 	    $l .= pp_amount $+{minus}, $+{num}, $+{commodity}, $+{inline_math};
@@ -1072,6 +1112,7 @@ while (@input) {
 	$l =~ s/"//g;
 	print_line $depth, $l;
     } elsif ($l =~ /^([=~].*)/) {  # automated transaction (=) or periodic transaction (~)
+	$after_auto = 1;
 	print_warning_once "Automated or periodic transaction skipped";
 	print_comment_top_level $depth, $1;
 	@stanza = read_stanza \@input;
@@ -1151,6 +1192,7 @@ while (@input) {
 	    print_comment_top_level $depth, $l;
 	}
     } elsif ($l =~ /^[!@]?(python)/) {  # Python
+	$after_auto = 1;
 	# The python directive is special in the sense that empty
 	# lines don't end the directive.
 	do {
@@ -1163,10 +1205,12 @@ while (@input) {
 	# Not needed in beancount and there's no equivalent
 	read_stanza \@input if $input[0] =~ /^\h+/;
     } elsif ($l =~ /^[!@]?(N|D|C|I|i|O|o|b|h|assert|check|expr|eval|value)(\s|$)/) {
+	$after_auto = 1;
 	    print_warning_once "Unsupported directive `$1` skipped";
 	    # Not supported in beancount
 	    print_comment_top_level $depth, $l;
     } elsif ($l =~ /^[0-9]/) {
+	$after_auto = 1;
 	if ($l =~ /$txn_header_RE/) {  # txn header
 	    $in_postings = 0;
 	    # You can have a comment on the same line as the payee
@@ -1300,14 +1344,28 @@ if ($config->{beancount_header}) {
     close $beancount_header;
 }
 
+print $_ for (@pre_output);
+
 if ($config->{automatic_declarations}) {
     # Print missing account and commodity declarations
+    my $out;
+
+    $out = "";
     for my $a (sort keys %account_declared) {
-	printf "$config->{account_open_date} open $a\n" if not defined $account_declared{$a};
+	$out .= sprintf "$config->{account_open_date} open $a\n" if not defined $account_declared{$a};
+    }
+    if ($out) {
+	print $out;
+	print "\n";
     }
 
+    $out = "";
     for my $c (sort keys %commodity_declared) {
-	printf "$config->{commodities_date} commodity $c\n" if not defined $commodity_declared{$c};
+	$out .= sprintf "$config->{commodities_date} commodity $c\n" if not defined $commodity_declared{$c};
+    }
+    if ($out) {
+	print $out;
+	print "\n";
     }
 }
 

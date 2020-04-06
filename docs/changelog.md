@@ -1,5 +1,12 @@
 # ledger2beancount releases
 
+## 2.1 (2020-04-06)
+
+* Handle postings with posting dates and comments but no amount
+* Show transactions with only one posting (without `bucket`)
+* Adding spacing between automatic declarations
+* Preserve preliminary info at the top
+
 ## 2.0 (2020-02-22)
 
 * Handle comments in `account` and `commodity` declarations

@@ -1,4 +1,9 @@
+; SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
+;
+; SPDX-License-Identifier: GPL-3.0-or-later
+
 1970-01-01 open Assets:Test
+
 1970-01-01 commodity EUR
 1970-01-01 commodity GBP
 1970-01-01 commodity USD
