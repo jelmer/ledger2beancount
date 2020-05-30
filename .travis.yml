@@ -2,16 +2,15 @@
 # SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-dist: xenial
 language: python
 python:
   - "3.6"
 env:
   - BEANCOUNT="beancount>=2.1.2"
-  - BEANCOUNT="hg+https://bitbucket.org/blais/beancount/"
+  - BEANCOUNT="git+https://github.com/beancount/beancount/"
 matrix:
   allow_failures:
-  - env: BEANCOUNT="hg+https://bitbucket.org/blais/beancount/"
+  - env: BEANCOUNT="git+https://github.com/beancount/beancount/"
 addons:
   apt:
     packages:
