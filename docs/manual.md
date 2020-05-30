@@ -8,7 +8,7 @@ author:
     - Stefano Zacchiroli
     - Martin Michlmayr
 keywords: ledger, beancount, conversion, accounting, bookkeeping
-date: April 2020
+date: May 2020
 documentclass: scrartcl
 urlcolor: blue
 toc: true
@@ -33,13 +33,13 @@ beancount.
 ledger2beancount is a Perl script and relies on the following Perl
 modules:
 
-* Config::Onion
-* Date::Calc
-* DateTime::Format::Strptime
-* File::BaseDir
-* Getopt::Long::Descriptive
-* String::Interpolate
-* YAML::XS
+* `Config::Onion`
+* `Date::Calc`
+* `DateTime::Format::Strptime`
+* `File::BaseDir`
+* `Getopt::Long::Descriptive`
+* `String::Interpolate`
+* `YAML::XS`
 
 You can install the required Perl modules with
 [cpanminus](https://metacpan.org/pod/distribution/App-cpanminus/bin/cpanm):
@@ -53,8 +53,8 @@ If you use Debian, you can install the dependencies with this command:
         libgetopt-long-descriptive-perl libdatetime-format-strptime-perl \
         libstring-interpolate-perl
 
-Note that String::Interpolate (libstring-interpolate-perl) is not in
-Debian stable.
+Note that `String::Interpolate` (`libstring-interpolate-perl`) is not
+in Debian stable.
 
 ledger2beancount itself consists of one script.  You can clone the
 repository and run the script directly or copy it to `$HOME/bin` or
@@ -161,7 +161,7 @@ of beancount, but some functionality may require an unreleased version of
 beancount.  You can install the latest development version of beancount
 directly from the beancount repository:
 
-    pip3 install hg+https://bitbucket.org/blais/beancount/
+    pip3 install git+https://github.com/beancount/beancount/
 
 Currently, there are no features that require an unreleased version of
 beancount.
@@ -255,13 +255,13 @@ mapping of account names described above is done after these directives.
 ## Amounts
 
 In ledger, amounts can be placed after the commodity.  This is converted
-to beancount with the the amount first, followed by the commodity.
+to beancount with the amount first, followed by the commodity.
 
 If you use commas as the decimal separator (i.e. values like `10,12`,
 using the ledger option `--decimal-comma`) you have to set the
 `decimal_comma` option to `true`.  Please note that commas are not
 supported as the decimal separator in beancount at the moment ([issue
-204](https://bitbucket.org/blais/beancount/issues/204)) so your
+204](https://github.com/beancount/beancount/issues/204)) so your
 amounts are converted not to use comma as the decimal separator.
 
 Commas as separators for thousands (e.g. `1,000,000`) are supported by
@@ -293,7 +293,7 @@ character will be replaced with an `X` if it's not a letter and the
 same will be done for the last character if it's not a letter or digit.
 Finally, all beancount commodities currently have to consist of at least
 two characters ([issue
-192](https://bitbucket.org/blais/beancount/issues/192)).
+192](https://github.com/beancount/beancount/issues/192)).
 
 If you require a mapping between ledger and beancount commodities, you
 can use `commodity_map`.  You can use your ledger commodity names or
@@ -357,7 +357,7 @@ into two postings.
 
 Beancount doesn't support ledger's [transaction
 codes](https://www.ledger-cli.org/3.0/doc/ledger3.html#Codes).  These are
-therefore stored as metatags if `code_tag` is set.
+therefore stored as metadata if `code_tag` is set.
 
 While these ledger codes can be integers (e.g. check numbers), there's no
 such requirement in ledger and they can be any string.  Therefore,
@@ -482,7 +482,7 @@ but you should make sure the values are valid in beancount.
 
 Beancount allows tags for transactions but currently doesn't support
 tags for postings ([issue
-144](https://bitbucket.org/blais/beancount/issues/144)).  Because of
+144](https://github.com/beancount/beancount/issues/144)).  Because of
 this, posting-level tags are currently stored as metadata with the key
 `tags`.  This should be seen as a workaround because metadata with the
 key `tags` is not treated the same way by beancount as proper tags.
@@ -553,7 +553,7 @@ would become the following in beancount:
 Comments are supported.
 
 Currently, beancount doesn't accept top-level comments with the `|` marker
-([issue 282](https://bitbucket.org/blais/beancount/issues/282)).
+([issue 282](https://github.com/beancount/beancount/issues/282)).
 ledger2beancount changes such comments to use the `;` marker.
 
 
@@ -561,7 +561,7 @@ ledger2beancount changes such comments to use the `;` marker.
 
 Beancount does not have a concept of [virtual
 costs](https://www.ledger-cli.org/3.0/doc/ledger3.html#Virtual-posting-costs)
-([issue 248](https://bitbucket.org/blais/beancount/issues/248)).
+([issue 248](https://github.com/beancount/beancount/issues/248)).
 ledger2beancount therefore treats them as regular costs (or, rather,
 as regular prices).
 
