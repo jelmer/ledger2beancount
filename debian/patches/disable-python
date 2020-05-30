@@ -6,8 +6,10 @@ Author: Jelmer Vernooĳ <jelmer@debian.org>
 ---
 Last-Update: 2020-01-01
 
---- ledger2beancount-1.8.orig/tests/directives.beancount
-+++ ledger2beancount-1.8/tests/directives.beancount
+Index: ledger2beancount/tests/directives.beancount
+===================================================================
+--- ledger2beancount.orig/tests/directives.beancount
++++ ledger2beancount/tests/directives.beancount
 @@ -11,7 +11,6 @@
  ;   - Unsupported directive `C` skipped
  ;   - Unsupported directive `D` skipped
@@ -16,7 +18,7 @@ Last-Update: 2020-01-01
  ;   - The `define` directive is not supported
  ;   - Unsupported directive `value` skipped
  ;   - The `def` directive is not supported
-@@ -211,18 +210,6 @@ poptag #foo
+@@ -216,18 +215,6 @@ poptag #foo
  ; Ignore pricing information
  ; N EUR
  
@@ -35,9 +37,11 @@ Last-Update: 2020-01-01
  2019-04-28 * "Transactions can follow python without empty line"
    Assets:Test                        10.00 EUR
    Equity:Opening-Balance            -10.00 EUR
---- ledger2beancount-1.8.orig/tests/directives.ledger
-+++ ledger2beancount-1.8/tests/directives.ledger
-@@ -206,18 +206,6 @@ D 1000.00 EUR
+Index: ledger2beancount/tests/directives.ledger
+===================================================================
+--- ledger2beancount.orig/tests/directives.ledger
++++ ledger2beancount/tests/directives.ledger
+@@ -209,18 +209,6 @@ D 1000.00 EUR
  ; Ignore pricing information
  N EUR
  
