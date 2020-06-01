@@ -1,5 +1,12 @@
 # ledger2beancount releases
 
+## 2.2 (2020-05-30)
+
+* Show warning for unknown `apply` directive
+* Recognize `apply rate` directive (an alias of `apply fixed`)
+* Don't convert meta-data on ignored virtual postings but keep as comments
+* Update location of beancount repository
+
 ## 2.1 (2020-04-06)
 
 * Handle postings with posting dates and comments but no amount
