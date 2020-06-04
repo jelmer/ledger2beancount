@@ -1,6 +1,10 @@
 ledger2beancount (2.2-1) UNRELEASED; urgency=medium
 
+  [ Debian Janitor ]
   * New upstream release.
+
+  [ Jelmer Vernooĳ ]
+  * Set upstream metadata fields: Bug-Submit, Repository.
 
  -- Debian Janitor <janitor@jelmer.uk>  Sat, 30 May 2020 12:46:25 +0000
 
