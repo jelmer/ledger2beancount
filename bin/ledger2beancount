@@ -21,29 +21,50 @@ use Date::Calc qw/Add_Delta_Days/;
 use DateTime::Format::Strptime qw/strftime/;
 use File::BaseDir qw/config_home/;
 use Getopt::Long::Descriptive;
+use List::MoreUtils qw(uniq);
+use Memoize;
 use POSIX qw/ceil/;
+use Regexp::Common;
 use String::Interpolate qw(safe_interpolate);
 use Unicode::Normalize;
 
+memoize('map_account');
+memoize('map_commodity');
+memoize('map_metadata');
+memoize('pp_date');
+
+use enum qw(DEPTH TYPE BLANK COMMENT POSTING FLAG ACCOUNT WHITESPACE AMOUNT
+            COST PRICE ASSERTION NUMBER CURRENCY DATE NOTE FIXATED);
 
 my ($opt, $usage) = describe_options(
     "ledger2beancount %o <ledger-file>",
-    [ "config|c=s", "configuration file", { default  => "ledger2beancount.yml"  } ],
+    [ "config|c=s", "configuration file", ],
     [ "help|h",     "print usage message and exit", { shortcircuit => 1 } ],
 );
 
 print($usage->text), exit if $opt->help;
 
-my $config_file = $opt->config;
-# Config::Onion expects filename without extension
-die "Config file must end in .yml" unless $config_file =~ s/\.(yml|yaml)$//;
-my @config_files = ($config_file, config_home('ledger2beancount', 'config'));
-my $config;
+my @config_files = ('ledger2beancount.yml', config_home('ledger2beancount', 'config.yml'));
+if (defined $opt->config) {
+    if (! -e $opt->config) {
+	print "Config file ", $opt->config, " doesn't exist\n";
+	exit 1;
+    }
+    if ($opt->config !~ /\.(yml|yaml)$/) {
+	print "Config file must end in .yml or .yaml\n";
+	exit 1;
+    }
+    unshift @config_files, $opt->config;
+}
+my $config = Config::Onion->new;
 foreach my $config_file (@config_files) {
+    next if ! -e $config_file;
+    # Config::Onion expects filename without extension
+    $config_file =~ s/.(yml|yaml)$//;
     $config = Config::Onion->load($config_file);
     # We don't actually use the Config::Onion feature to load several
     # config files.  We merely use it to set some defaults.
-    last if defined $config;
+    last;
 }
 
 $config->set_default(date_format => "%Y-%m-%d");
@@ -75,32 +96,29 @@ my $txn_header_RE = qr/^(?<date>$date_RE)(=(?<auxdate>$date_RE))?(\s+|$)(?<flag>
 my $hledger_payee_narration_RE = qr/(?<payee>[^|]+?)\s*\|\s*(?<narration>.*)/;
 my $tags_RE = qr/(?<tags>[\w:-]+)/;
 my $hledger_tags_RE = qr/(?<tags>[^ ]+:.*)/;
-# An account can be pretty much anything but it has to be followed by
-# two spaces, a tab or new line (see $posting_RE).
+# An account can be pretty much anything but in a posting it has to be
+# followed by two spaces, a tab or new line.
 # To keep the regex simpler, we parse the () and [] for virtual accounts
 # as part of the account name and strip these brackets later.
 my $account_RE = qr/[^\s;][^\t]*?/;
-my $value_RE = qr/[\d.,]+/;
-my $value_exp_RE = qr/$value_RE([\h*\/+-]*$value_RE)?/;
+my $number_RE = qr/([\d,]*\d(\.\d+)?|\.\d+)/;
+my $number_decimal_comma_RE = qr/([\d.]*\d(,\d+)?|,\d+)/;
+if ($config->{decimal_comma}) {
+    $number_RE = $number_decimal_comma_RE;
+}
 # A quoted commodity ("LU0274208692") can contain anything
 # between quotes.
 my $commodity_quoted_RE = qr/(["'])(?:(?=(\\?))\g{-1}.)*?\g{-2}/;
 # An unquoted commodity may not contain certain characters
 my $commodity_unquoted_RE = qr/(?!-)[^;\s0-9=)("'{}@*\/+,.-]+/;
 my $commodity_RE = qr/$commodity_quoted_RE|$commodity_unquoted_RE/;
-# Ledger supports three different amount formats:
-# [minus] amount commodity
-my $amount_mnc_RE = qr/(?<minus>-?)(?<num>$value_exp_RE)\s*(?<commodity>$commodity_RE)/; # -10.00 EUR
-# commodity [minus] amount
-my $amount_cmn_RE = qr/(?<commodity>$commodity_RE)\s*(?<minus>-?)(?<num>$value_exp_RE)/; # EUR -10.00
-# [minus] commodity amount
-my $amount_mcn_RE = qr/(?<minus>-?)(?<commodity>$commodity_RE)\s*(?<num>$value_exp_RE)/; # -EUR 10.00
-my $amount_RE = qr/(?<inline_math>\(?)($amount_mnc_RE|$amount_cmn_RE|$amount_mcn_RE)(\)?)/;
 my $comment_top_level_RE = qr/[;#%|*]\s?(?<comment>.*?)/;
 my $comment_RE = qr/;\s*(?<comment>.*)/;
 my $metadata_RE = qr/;\s*(?<key>[^\h:][^\h]*?):(?<typed>:)?(\s*$|\s+(?<value>.*))/;
 my $hledger_metadata_RE = qr/(?<key>[^:]+):\s*(?<value>.+)/;
-my $posting_RE = qr/(?<posting>((?<flag>$flags_RE)\s+)?(?<account>$account_RE)(  | \t|\t|\s*$)\s*(?<amount>$amount_RE)?)$comment_RE?/;
+# Postings: this does not match everything, just ensures a line consists of
+# a posting
+my $posting_RE = qr/((?<flag>$flags_RE)\s+)?(?<account>$account_RE)/;
 my $price_RE = qr/^P\s+(?<date>$date_RE)\s+(\d\d:\d\d(:\d\d)?\s+)?(?<commodity1>$commodity_RE)\s+(?<commodity2>.*)/;
 
 # Maximum limit for beancount commodities
@@ -128,6 +146,22 @@ my %ledger_accounts;
 my %ledger_commodities;
 my %ledger_metadata;
 
+# Date parsing functions
+my $date_complete = DateTime::Format::Strptime->new(
+    pattern  => $config->{date_format},
+    on_error => "undef",
+);
+
+my $date_no_year = DateTime::Format::Strptime->new(
+    pattern  => $config->{date_format_no_year},
+    on_error => "undef",
+);
+
+my $date_iso = DateTime::Format::Strptime->new(
+    pattern  => "%Y-%m-%d",
+    on_error => "undef",
+);
+
 # Declarations
 sub map_commodity($);
 sub print_tags($@);
@@ -151,7 +185,11 @@ sub escape_beancount_string($) {
 # return a beancount string literal, with a given content
 sub mk_beancount_string($) {
     my ($s) = @_;
-    return '"' . escape_beancount_string($s) . '"';
+    if ($s !~ /\\|"/) {
+	return '"' . $s . '"';
+    } else {
+	return '"' . escape_beancount_string($s) . '"';
+    }
 }
 
 
@@ -161,10 +199,24 @@ sub pp_date($$) {
 
     my $date;
 
-    my $date_complete = DateTime::Format::Strptime->new(
-	pattern  => $config->{date_format},
-	on_error => "undef",
-    );
+    # Try the date formats built into ledger
+    my $date_str_iso;
+    if ($date_str =~ /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2}$)/) {
+	# Formats %Y/%m/%d and %Y-%m-%d
+	$date_str_iso = sprintf "%4d-%02d-%02d", $1, $2, $3;
+	# We don't need to parse and format the string again if it's
+	# already in ISO format.
+	return $date_str_iso if $date_str eq $date_str_iso;
+    } elsif ($date_str =~ /^(\d{1,2})\/(\d{1,2})$/) {
+	# Format %m/%d
+	$date_str_iso = sprintf "%4d-%02d-%02d", $year, $1, $2;
+    }
+    if ($date_str_iso) {
+	$date = $date_iso->parse_datetime($date_str_iso);
+	return strftime("%F", $date) if $date;
+    }
+
+    # Try the configured date forms
     $date = $date_complete->parse_datetime($date_str);
     if ($date) {
 	return strftime("%F", $date);
@@ -172,18 +224,10 @@ sub pp_date($$) {
 	die "Can't parse date $date_str (set date_format and date_format_no_year)";
     }
 
-    my $date_no_year = DateTime::Format::Strptime->new(
-	pattern  => $config->{date_format_no_year},
-	on_error => "undef",
-    );
     $date = $date_no_year->parse_datetime($date_str);
     if ($date) {
-	if ($year) {
-	    $date->set_year($year);
-	    return strftime("%F", $date);
-	} else {
-	    die "Date without year but no Y/year directive: $date_str";
-	}
+	$date->set_year($year);
+	return strftime("%F", $date);
     } else {
 	die "Can't parse date $date_str (set date_format_no_year)";
     }
@@ -203,14 +247,6 @@ sub parse_ledger_value($) {
     }
 
     return $value;
-}
-
-
-# Return the commodity from an amount
-sub parse_commodity($) {
-    my ($amount) = @_;
-
-    return $+{commodity} if $amount =~ /$amount_RE/;
 }
 
 
@@ -274,23 +310,46 @@ sub pp_metadata($$) {
     return "$key: $value";
 }
 
-# Print an amount ([minus] value commodity)
-sub pp_amount($$$$) {
-    my ($minus, $value, $commodity, $inline_math) = @_;
+# Print an amount
+sub pp_amount($) {
+    my ($amount) = @_;
 
-    if ($config->{decimal_comma}) {
-	$value =~ s/\.//g;
-	$value =~ s/,/./; # issue #204
-    }
+    return sprintf "%s %s", $amount->[NUMBER], $amount->[CURRENCY];
+}
 
-    # ledger allows amounts without a leading zero (e.g. 0.10) but
-    # beancount doesn't.
-    $value = "0$value" if $value =~ /^[\.,]/;
 
-    return sprintf "%s%s%s%s %s", $inline_math ? "(" : "",
-	$minus =~ "^-" ? "-" : "", $value,
-	$inline_math ? ")" : "",
-	map_commodity $commodity;
+# Print a lot
+sub pp_lot($) {
+    my ($lot) = @_;
+
+    my @info;
+    push @info, pp_amount $lot->[AMOUNT] if defined $lot->[AMOUNT];
+    push @info, $lot->[DATE] if defined $lot->[DATE];
+    push @info, '"' . $lot->[NOTE] . '"' if defined $lot->[NOTE];
+    return join ", ", @info;
+}
+
+
+# Print a cost
+sub pp_cost($) {
+    my ($lot) = @_;
+
+    my $num = defined $lot->[TYPE] ? $lot->[TYPE] : 1;
+    my $info = "{" x $num;
+    $info .= pp_lot $lot;
+    $info .= "}" x $num;
+    return $info;
+}
+
+
+# Print a price
+sub pp_price(@) {
+    my ($lot) = @_;
+
+    my $info = "@" x $lot->[TYPE];
+    $info .= " ";
+    $info .= pp_amount $lot->[AMOUNT];
+    return $info;
 }
 
 
@@ -486,7 +545,11 @@ sub handle_comment($$$) {
 
     if ($config->{hledger} && $l =~ /;\s*(?<comment>.*?)$hledger_tags_RE/) {
 	handle_hledger_tags $depth, $+{tags}, $defer;
-	return $+{comment};
+	my $comment = $+{comment};
+	if ($+{tags}) {
+	    $comment =~ s/,?\s*$//;
+	}
+	return $comment;
     } elsif ($l =~ /^$metadata_RE/) {  # metadata comment
 	handle_metadata $in_postings ? 2 : 1, \%+, $defer;
 	return;
@@ -577,12 +640,6 @@ sub map_account_apply($) {
 sub map_account($) {
     my ($account) = my ($ledger_account) = @_;
 
-    if (exists $ledger_alias{$account}) {
-	$account = $ledger_alias{$account};
-    } else {
-	$account = map_account_apply $account;
-    }
-
     $ledger_accounts{$account} = 1;
 
     # Map accounts according to the config
@@ -615,32 +672,17 @@ sub map_account($) {
 }
 
 
-# Replace ledger account names with corresponding beancount account names
-# while trying to keep the whitespace intact by padding where necessary.
-sub replace_account($) {
-    my ($l) = @_;
+# Applies any pending account renames (e.g. ledger alias and "apply
+# account") and then maps the account name.
+sub apply_account($) {
+    my ($account) = @_;
 
-    if ($l =~ /^$posting_RE/) {
-	my $old = $+{account};
-	my $new = map_account $old;
-	if ($l !~ s/\Q$old\E$/$new/) {
-	    if (length($new) <= length($old)) {
-		$new .= " "x abs(length($new) - length($old));
-		$l =~ s/\Q$old\E/$new/;
-	    } else {
-		my $orig_old = $old;
-		$old .= " "x (length($new) - length($old));
-		# Ensure there are two spaces or a tab after the account name
-		return $l if $l =~ s/\Q$old\E  /$new  /;
-		return $l if $l =~ s/\Q$old\E\t/$new\t/;
-		# We can't preserve space
-		return $l if $l =~ s/\Q$orig_old\E/$new/;
-	    }
-	}
-	return $l;
+    if (exists $ledger_alias{$account}) {
+	$account = $ledger_alias{$account};
     } else {
-	die "Not a posting: $l";
+	$account = map_account_apply $account;
     }
+    return map_account($account);
 }
 
 
@@ -675,19 +717,6 @@ sub map_commodity($) {
     return $commodity;
 }
 
-# Replace commodity in string with beancount commodity
-# Also rewrites the amounts from the various formats supported in ledger
-# to [minus] amount commodity
-sub replace_commodity($) {
-    my ($s) = @_;
-
-    if ($s =~ /(  |\t|\t )$amount_RE/) {
-	$s =~ s/(  |\t|\t )$amount_RE/$1@{[pp_amount $+{minus}, $+{num}, $+{commodity}, $+{inline_math}]}/;
-    } elsif ($s =~ /$amount_RE/) {
-	$s =~ s/$amount_RE/@{[pp_amount $+{minus}, $+{num}, $+{commodity}, $+{inline_math}]}/;
-    }
-    return $s;
-}
 
 sub get_output() {
     if (!$after_auto) {
@@ -767,6 +796,240 @@ sub print_tags($@) {
     }
 }
 
+
+# Parse inline math
+sub get_value_expr($) {
+    my ($l) = @_;
+
+    if ($l !~ /^(?<math>$RE{balanced}{-parens=>'()'})\s*(?<rest>.*)/) {
+	die "Cannot parse inline math from $l\n";
+    }
+    my $math = $+{math};
+    my $rest = $+{rest};
+
+    # Strip the outer () since beancount doesn't require them.
+    $math =~ s/^\(//;
+    $math =~ s/\)$//;
+
+    if ($config->{decimal_comma}) {
+	$math =~ s/\.//g;
+	$math =~ tr/,/./; # issue #204
+    }
+
+    # We have to move the commodity from within the inline math construct
+    # to after (outside) the inline math since beancount expects the
+    # format "number currency" (where number can be basic math).
+    # The easiest way to do this is to remove all arithmetic operations
+    # and see what's left over.  If there's a single term at the end,
+    # that's the commodity we need.  If there are multiple, beancount
+    # can't handle it.
+    my $terms = $math;
+    $terms =~ s/[.\d\(\)\*\/+-]/ /g;
+    $terms =~ s/^\s+//;
+    my @terms = uniq split /\s+/, $terms;
+    if (scalar @terms == 0) {
+	die "Failed to find commodity in inline math: $math\n";
+    } elsif (scalar @terms == 1) {
+	$math =~ s/\s*\Q$terms[0]\E\s*//g;
+    } else {
+	print_warning_once("Complex inline math not supported in beancount: $math");
+    }
+    my $amount;
+    $amount->[NUMBER] = $math;
+    $amount->[CURRENCY] = map_commodity $terms[0];
+    return $amount, $rest;
+}
+
+
+# Parse an amount
+sub get_amount($) {
+    my ($l) = @_;
+
+    # Inline math
+    if ($l =~ /^\(/) {
+	return get_value_expr $l;
+    }
+
+    my $amount;
+    $amount->[FIXATED] = 1 if $l =~ s/^=\s*//;
+
+    # Ledger supports three different amount formats:
+    # [minus] number currency
+    # [minus] currency number
+    # currency [minus] number
+    if ($l =~ /^(?<minus>-\s*)?(?<number>$number_RE)\s*(?<currency>$commodity_RE)\s*(?<rest>.*)/ ||
+        $l =~ /^(?<minus>-\s*)?(?<currency>$commodity_RE)\s*(?<number>$number_RE)\s*(?<rest>.*)/ ||
+        $l =~ /^(?<currency>$commodity_RE)\s*(?<minus>-\s*)(?<number>$number_RE)\s*(?<rest>.*)/) {
+	my $amount;
+	my $rest = $+{rest};
+	my $minus = $+{minus} ? "-" : "";
+	$amount->[NUMBER] = $+{number};
+	$amount->[CURRENCY] = map_commodity $+{currency};
+
+	if ($config->{decimal_comma}) {
+	    $amount->[NUMBER] =~ s/\.//g;
+	    $amount->[NUMBER] =~ tr/,/./; # issue #204
+	}
+
+	# ledger allows amounts without a leading zero (e.g. .10) but
+	# beancount doesn't.
+	$amount->[NUMBER] =~ s/^\./0./;
+
+	$amount->[NUMBER] = $minus . $amount->[NUMBER];
+
+	return $amount, "$rest";
+    } else {
+	die "Cannot parse amount from $l\n";
+    }
+}
+
+
+# Parse a lot
+sub get_lot($) {
+    my ($l) = @_;
+    my $l_orig = $l;
+
+    my ($amount, $cost, $date);
+
+    # A lot can contain various information but pretty much everything
+    # apart from the amount is optional.  The order is fixed, though:
+    # amount, cost, date, note and lot value expressions.  If no
+    # optional information is specified, it's merely an amount and not
+    # a lot.
+
+    # Find the amount
+    ($amount, $l) = get_amount $l;
+
+    # Most amounts are not followed by lot information.  If the amount
+    # is followed by something we know can't be a lot information,
+    # stop spending time to look for lot information.  Specifically,
+    # check for:
+    # * Line end: $
+    # * Comment: ;
+    # * Price: @
+    # * Virtual price: (@)
+    # * Balance assertion: =
+    if ($l =~ /^($|;|@|\(@|=)/) {
+	return $amount, $cost, $l;
+    }
+
+    # Look for a cost: {...} or {{...}}
+    if ($l =~ /^(?<type>\{\{?)\s*(?<amount>[^}]+)\}\}?\s*(?<rest>.*)/) {
+	$l = $+{rest};
+	$cost->[TYPE] = length $+{type};
+	my $rest;
+	($cost->[AMOUNT], $rest) = get_amount $+{amount};
+	if ($rest) {
+	    die "Cost in lot had a rest: $rest";
+	}
+    }
+
+    # A lot date: dates are always in square brackets [date]
+    if ($l =~ /^\[(?<date>\d+[^ =\]]+)\]\s*(?<rest>.*)/) {
+	$l = $+{rest};
+	$date = pp_date $+{date}, 0;
+    }
+
+    # A lot note: (note).  Don't confuse with a ((lot value expression))
+    # (see below) or a virtual price: (@).
+    if ($l !~ /^(\(\(|\(@)/ && $l =~ /^(?<note>$RE{balanced}{-parens=>'()'})\s*(?<rest>.*)/) {
+	$l = $+{rest};
+	$cost->[NOTE] = $+{note};
+	$cost->[NOTE] =~ s/^\(//;
+	$cost->[NOTE] =~ s/\)$//;
+    }
+
+    # A lot value expression: ((market))
+    if ($l =~ /^\(\(/ && $l =~ /^(?<valuation>$RE{balanced}{-parens=>'()'})\s*(?<rest>.*)/) {
+	$l = $+{rest};
+	my $valuation = $+{valuation};
+	$valuation =~ s/^\(\(//;
+	$valuation =~ s/\)\)$//;
+	$valuation =~ s/^\s+//;
+	$valuation =~ s/\s+$//;
+	# Print a warning unless it's "market" which is the default
+	# behaviour anyway.
+	if ($valuation ne "market") {
+	    print_warning_once "Lot value expressions not supported in beancount: $valuation";
+	}
+    }
+
+    # A date without a cost is not valid in beancount, so add the
+    # amount as the cost, which essentially means that the cost
+    # is 1.00 of the currency.
+    if ($date) {
+	if (!defined $cost->[AMOUNT]) {
+	    $cost->[TYPE] = 2;
+	    $cost->[AMOUNT] = $amount;
+	}
+	$cost->[DATE] = $date;
+    }
+
+    return $amount, $cost, $l;
+}
+
+
+# Parse a posting
+sub parse_posting($) {
+    my ($l) = @_;
+
+    my $posting;
+    $posting->[TYPE] = POSTING;
+
+    # We parse from left to right since there is a specific order to
+    # everything.  When we parse something, we put the rest of the
+    # line back into $l.
+
+    # Flag: ! or *
+    if ($l =~ /^([!*])\s*(.*)/) {
+	$posting->[FLAG] = $1;
+	$l = $2;
+    }
+
+    # Account: an account can be pretty much anything, but we know:
+    # * It's the first thing after a flag.
+    # * It ends with two spaces, a tab or the end of line
+    if ($l =~ /^(.*?)((  |\t| \t|\s*$)\h*)(.*)/) {
+	$posting->[ACCOUNT] = $1;
+	$posting->[WHITESPACE] = $2;
+	$l = $4;
+    }
+
+    # Next we probably have an amount or a lot, but this is not necessarily
+    # the case: it could also be a balance assignment (=) or a
+    # comment (;).  If it's neither of those two, it has to be
+    # an amount.
+    if ($l =~ /^[^=;]/) {
+	($posting->[AMOUNT], $posting->[COST], $l) = get_lot $l;
+    }
+
+    # A price: either @, @@, (@), or (@@)
+    if ($l =~ /^\(?(@@?)\)?\s*(.*)/) {
+	$posting->[PRICE]->[TYPE] = length $1;
+	($posting->[PRICE]->[AMOUNT], $_, $l) = get_lot $2;
+    }
+
+    # An assertion (if there's no amount) or balance assignment
+    # (if there's no amount).  Starts with =
+    if ($l =~ /^=\s*(.*)/) {
+	($posting->[ASSERTION]->[AMOUNT], $l) = get_amount $1;
+    }
+
+    # A comment: starts with ;
+    if ($l =~ /^;(.*)/) {
+	$l = "";
+	$posting->[COMMENT] = $1;
+    }
+
+    # There should be nothing left
+    if ($l) {
+	die "Cannot handle: $l";
+    }
+
+    return $posting;
+}
+
+
 # Process a ledger transaction
 sub process_txn(@) {
     my @txn = @_;
@@ -775,58 +1038,67 @@ sub process_txn(@) {
     # to distinguish different kinds of balance assignments.
     my $total_postings = 0;
     my $postings_with_amount = 0;
-    my @accounts;
+    my @txn_parsed;
     foreach my $l (@txn) {
+	my $line;
 	my ($depth, $l) = strip_indentation($l);
-	if ($l =~ /^$posting_RE/) {
+	if ($l =~ /^$comment_RE/) {
+	    $line->[TYPE] = COMMENT;
+	    $line->[COMMENT] = $l;
+	} elsif ($l =~ /^$posting_RE/) {
+	    $line = parse_posting $l;
 	    $total_postings++;
-	    $postings_with_amount++ if $+{amount};
-	    push @accounts, $+{account};
+	    $postings_with_amount++ if defined $line->[AMOUNT];
+	} elsif ($l =~ /^\h*$/) {  # whitespace or blank line
+	    $line->[TYPE] = BLANK;
+	} else {
+	    die "Cannot handle line: $l";
 	}
+	$line->[DEPTH] = $depth;
+	push @txn_parsed, $line;
     }
+    my @postings = grep {$_->[TYPE] == POSTING} @txn_parsed;
 
     my $has_amount;
     my $skipped_posting = 0;
-    foreach my $l (@txn) {
-	# print "D: line: ", "\n"; dump_cur_txn(); print "\n";
-
-	(my $depth, $l) = strip_indentation($l);
-
-	if ($l =~ /^$comment_RE/) {
+    foreach my $i (@txn_parsed) {
+	if ($i->[TYPE] == COMMENT) {
 	    # If there's a virtual posting that is ignored, we have to
 	    # discard the meta-data associated with the posting on
 	    # following lines (if there's any).  But there might be
 	    # comments worth preserving.  So just preserve all ledger
 	    # comments (i.e. comments and meta-data) as is.
 	    if ($skipped_posting) {
-		push_line $depth, $l;
+		push_line $i->[DEPTH], $i->[COMMENT];
 		print_warning_once "Comment or meta-data on virtual posting preserved as comment";
 	    } else {
-		my $comment = handle_comment $depth, $l, 0;
-		push_comment $depth, $comment if $comment;
+		my $comment = handle_comment $i->[DEPTH], $i->[COMMENT], 0;
+		push_comment $i->[DEPTH], $comment if $comment;
 	    }
-	} elsif ($l =~ /^$posting_RE/) {
-	    print_tags $depth+1, @cur_txn_tags;
+	} elsif ($i->[TYPE] == POSTING) {
+	    print_tags $i->[DEPTH]+1, @cur_txn_tags;
 	    @cur_txn_tags = ();
-	    my $account = $+{account};
+
+	    my $l = "";
+	    $l .= "$i->[FLAG] " if defined $i->[FLAG];
+
+	    my $account_length_old = length $i->[ACCOUNT];
 	    # Check for virtual and deferred accounts
-	    if ($account =~ /^\(/) {
+	    if ($i->[ACCOUNT] =~ /^\(/) {
 		# Ignore virtual postings with parentheses
 		print_warning_once "Virtual posting in parentheses ignored";
 		$skipped_posting = 1;
 		next;
-	    } elsif ($account =~ /^\[(.*)\]/) {
+	    } elsif ($i->[ACCOUNT] =~ /^\[(.*)\]/) {
 		if ($config->{convert_virtual}) {
-		    $account = $1;
-		    $l =~ s/\Q[$account]\E/$account  /; # Make them real
+		    $i->[ACCOUNT] = $1; # Make account real
 		} else {
 		    print_warning_once "Virtual posting in bracket ignored (see convert_virtual option)";
 		    $skipped_posting = 1;
 		    next;
 		}
-	    } elsif ($account =~ /^<(.*)>/) {
-		    $account = $1;
-		    $l =~ s/\Q<$account>\E/$account  /;
+	    } elsif ($i->[ACCOUNT] =~ /^<(.*)>/) {
+		    $i->[ACCOUNT] = $1;
 	    }
 	    $skipped_posting = 0; # reset variable with each posting
 	    $in_postings = 1;
@@ -834,133 +1106,134 @@ sub process_txn(@) {
 	    my $auxdate;
 	    $has_amount = $+{amount} ? 1 : 0;
 
-	    $l = replace_account $l;
+	    # Replace ledger account names with corresponding beancount account names
+	    # while trying to keep the whitespace intact.
+	    $i->[ACCOUNT] = apply_account $i->[ACCOUNT];
+	    $l .= $i->[ACCOUNT];
+	    my $account_length_new = length $i->[ACCOUNT];
+	    my $space_diff = " "x abs($account_length_new - $account_length_old);
+	    if ($account_length_new <= $account_length_old) {
+		$i->[WHITESPACE] .= $space_diff;
+	    } else {
+		$i->[WHITESPACE] =~ s/$space_diff//;
+		# # Ensure there are two spaces
+		$i->[WHITESPACE] = "  " if $i->[WHITESPACE] eq " " || $i->[WHITESPACE] eq "";
+	    }
 
-	    if ($l =~ /^$posting_RE(\s*(?<curlyopen>\{\{?)\s*(?<fixated_cost>=\s*)?(?<lot_cost>$amount_RE)\s*(?<curlyclose>\}\}?))?\s*(\[(?<date>$date_RE)\])?\s*(\((?<lot_note>[^@].*)\))?\s*(\(?(?<at>@@?)\)?\s*?(?<fixated_price>=\s*)?(?<lot_price>$amount_RE))?(\s*=\s*(?<assertion>$amount_RE))?(\s*$comment_RE)?/) {
-		# posting with unit price and optional lot price
-		# XXX refactor/merge with previous regex case
-		my $lot_info = "";
-		$lot_info .= ", " . pp_date $+{date}, 0 if (defined $+{date});
-		$lot_info .= ", " . mk_beancount_string $+{lot_note} if (defined $+{lot_note});
-		if (defined $+{lot_price} && not defined $+{lot_cost}) {
-		    # No ledger lot cost, only price.  This one is tricky
-		    # because this convention can be used for two different
-		    # purposes:
-		    # 1) For conversion between currencies where you do not
-		    # generally wish to retain the cost.
-		    # 2) To acquire/dispose of commodities (e.g. shares)
-		    # where you want to retain the cost.
-		    #
-		    # Most currencies have 3 characters (e.g. EUR, USD, GBP)
-		    # whereas commodities often have more (e.g. the ISIN).
-		    # Therefore, we assume the cost should not be kept if
-		    # both currencies have 3 characters.  Since this won't
-		    # work in all cases, we also check for a list of
-		    # commodities.  Similarly, we allow users to configure
-		    # commodities that should be treated as currencies.
-		    my $commodity1 = map_commodity $+{commodity};
-		    my $commodity2 = map_commodity parse_commodity $+{lot_price};
-		    if (!$+{fixated_price} && ((length $commodity1 == 3 && length $commodity2 == 3 &&
-			!($commodity1 ~~ @{$config->{currency_is_commodity}})) ||
-			$commodity1 ~~ @{$config->{commodity_is_currency}} ||
-			$commodity2 ~~ @{$config->{commodity_is_currency}})) {
-			$l = sprintf "$+{posting} %s %s", "@" x length $+{at}, replace_commodity $+{lot_price};
-		    } else {
-			$l = sprintf "$+{posting} %s%s%s%s", "{" x length $+{at},
-			    replace_commodity $+{lot_price}, $lot_info, "}" x length $+{at};
-		    }
-		} elsif (defined $+{lot_cost}) {
-		    $l = "$+{posting} $+{curlyopen}" . replace_commodity($+{lot_cost}) . "$lot_info$+{curlyclose}";
-		    # ledger requires you to specify both lot cost and lot price
-		    # due to a bug.  If both are the same, don't put in the price.
-		    if (defined $+{lot_price} && ($+{lot_cost} ne $+{lot_price})) {
-			$l .= " $+{at} " . replace_commodity $+{lot_price};
-		    }
+	    if (defined $i->[AMOUNT]) {
+		$l .= $i->[WHITESPACE] . pp_amount $i->[AMOUNT];
+	    }
+
+	    if (defined $i->[PRICE] && !defined $i->[COST]) {
+		# No ledger lot cost, only price.  This one is tricky
+		# because this convention can be used for two different
+		# purposes:
+		# 1) For conversion between currencies where you do not
+		# generally wish to retain the cost.
+		# 2) To acquire/dispose of commodities (e.g. shares)
+		# where you want to retain the cost.
+		#
+		# Most currencies have 3 characters (e.g. EUR, USD, GBP)
+		# whereas commodities often have more (e.g. the ISIN).
+		# Therefore, we assume the cost should not be kept if
+		# both currencies have 3 characters.  Since this won't
+		# work in all cases, we also check for a list of
+		# commodities.  Similarly, we allow users to configure
+		# commodities that should be treated as currencies.
+		my $commodity1 = $i->[AMOUNT]->[CURRENCY];
+		my $commodity2 = $i->[PRICE]->[AMOUNT]->[CURRENCY];
+		if (!defined $i->[PRICE]->[AMOUNT]->[FIXATED] && ((length $commodity1 == 3 && length $commodity2 == 3 &&
+		    !($commodity1 ~~ @{$config->{currency_is_commodity}})) ||
+		    $commodity1 ~~ @{$config->{commodity_is_currency}} ||
+		    $commodity2 ~~ @{$config->{commodity_is_currency}})) {
+		    $l .= " " . pp_price $i->[PRICE];
 		} else {
-		    $l = $+{posting};
+		    $l .= " " . pp_cost $i->[PRICE];
 		}
-		if ($+{commodity} && !defined $+{lot_cost}) {
-		    # Apply any fixated costs if needed
-		    foreach my $a (reverse @ledger_apply) {
-			if (${$a}[0] eq "fixed") {
-			    my ($commodity, $fixated) = split /\s+/, ${$a}[1], 2;
-			    $fixated = replace_commodity $fixated;
-			    $l =~ s/($+{amount})/$1 {$fixated}/ if $+{commodity} eq $commodity;
+	    } elsif (defined $i->[COST]) {
+		$l .= " " . pp_cost $i->[COST];
+		# ledger requires you to specify both lot cost and lot price
+		# due to a bug.  If both are the same, don't put in the price.
+		if (defined $i->[PRICE]->[AMOUNT] && (!defined $i->[COST]->[AMOUNT] || pp_amount $i->[COST]->[AMOUNT] ne pp_amount $i->[PRICE]->[AMOUNT])) {
+		    $l .= " " . pp_price $i->[PRICE];
+		}
+	    }
+
+	    if (defined $i->[AMOUNT] && !defined $i->[COST]) {
+		# Apply any fixated costs if needed
+		foreach my $a (reverse @ledger_apply) {
+		    if (${$a}[0] eq "fixed") {
+			my $fixated = ${$a}[1];
+			if ($i->[AMOUNT]->[CURRENCY] eq map_commodity $fixated->[CURRENCY]) {
+			    $l .= " " . pp_cost $fixated;
 			}
 		    }
 		}
-		if ($+{comment}) {
-		    # Ideally, handling of postdates and auxdates would be
-		    # done in handle_comment but this is difficult because
-		    # push_deferred_meta has to be called before push_metadata
-		    # of postdate and auxdate.
-		    $+{comment} =~ /(^\s*\[(?<postdate>$date_RE)?(=(?<auxdate>$date_RE))?\])?(\s*;?\s*(?<comment>.*))/;
-		    $auxdate = $+{auxdate};
-		    $postdate = $+{postdate};
-		    my $comment = handle_comment $depth, "; $+{comment}", 1;
-		    if ($comment) {
-			$l .= " ; $comment" if $comment;
-		    } else {
-			# We removed all comments so strip trailing whitespace
-			# in case there's an account with no amount
-			$l =~ s/\s+$//;
-		    }
-		}
-		if ($+{assertion}) {
-		    push_assertion $+{account}, replace_commodity $+{assertion};
-		    if ($total_postings == 2 && $postings_with_amount == 0) {
-			# We have two postings, i.e. two accounts; remove the current
-			# account from the list of accounts to find out which account
-			# we have to pad against.
-			@accounts = grep { $_ ne $+{account} } @accounts;
-			print_line 0, sprintf "%s pad %s %s", $cur_txn_header{date}, map_account $+{account}, map_account $accounts[0];
-			print_line 0, pp_cur_assertions;
-			# Skip transaction (the transaction itself is just two
-			# null postings, which are not valid in beancount)
-			pop_txn();
-			return;
-		    } elsif ($total_postings > 2 && ($total_postings-$postings_with_amount) == 2) {
-			print_warning_once "Balance assignments with 2 null postings not supported";
-		    }
-		    $l =~ s/\s*=\s*\Q$+{assertion}\E//;
-		}
-		if ($has_amount) {
-		    push_line $depth, replace_commodity $l;
-		} else {
-		    push_line $depth, $l;
-		}
-	    } else {
-		die "Can't parse: $l";
 	    }
+
+	    if ($i->[COMMENT]) {
+		# Ideally, handling of postdates and auxdates would be
+		# done in handle_comment but this is difficult because
+		# push_deferred_meta has to be called before push_metadata
+		# of postdate and auxdate.
+		$i->[COMMENT] =~ /(^\s*\[(?<postdate>$date_RE)?(=(?<auxdate>$date_RE))?\])?(\s*;?\s*(?<comment>.*))/;
+		$auxdate = $+{auxdate};
+		$postdate = $+{postdate};
+		my $comment = handle_comment $i->[DEPTH], "; $+{comment}", 1;
+		if ($comment) {
+		    $l .= $i->[WHITESPACE] if !defined $i->[AMOUNT];
+		    $l .= " ; $comment" if $comment;
+		}
+	    }
+
+	    if ($i->[ASSERTION]) {
+		push_assertion $i->[ACCOUNT], pp_amount $i->[ASSERTION]->[AMOUNT];
+		if ($total_postings == 2 && $postings_with_amount == 0) {
+		    # We have two postings, i.e. two accounts; remove the current
+		    # account from the list of accounts to find out which account
+		    # we have to pad against.
+		    my @accounts = map {apply_account $_->[ACCOUNT]} @postings;
+		    @accounts = grep { $_ ne $i->[ACCOUNT] } @accounts;
+		    print_line 0, sprintf "%s pad %s %s", $cur_txn_header{date}, $i->[ACCOUNT], $accounts[0];
+		    print_line 0, pp_cur_assertions;
+		    # Skip transaction (the transaction itself is just two
+		    # null postings, which are not valid in beancount)
+		    pop_txn();
+		    return;
+		} elsif ($total_postings > 2 && ($total_postings-$postings_with_amount) == 2) {
+		    print_warning_once "Balance assignments with 2 null postings not supported";
+		}
+	    }
+
+	    push_line $i->[DEPTH], $l;
+
 	    # Show all metadata that was on the same line as the posting
-	    push_deferred_meta $depth + 1;
-	    push_metadata $depth + 1, $config->{postdate_tag}, pp_date $postdate, 0 if defined $postdate && defined $config->{postdate_tag};
-	    push_metadata $depth + 1, $config->{auxdate_tag}, pp_date $auxdate, 0 if defined $auxdate && defined $config->{auxdate_tag};
-	} elsif ($l =~ /^\h*$/) {  # whitespace or blank line
+	    push_deferred_meta $i->[DEPTH] + 1;
+	    push_metadata $i->[DEPTH] + 1, $config->{postdate_tag}, pp_date $postdate, 0 if defined $postdate && defined $config->{postdate_tag};
+	    push_metadata $i->[DEPTH] + 1, $config->{auxdate_tag}, pp_date $auxdate, 0 if defined $auxdate && defined $config->{auxdate_tag};
+	} elsif ($i->[TYPE] == BLANK) {
 	    push_line 0, "";
 	} else {  # there shouldn't be anything
-	    die "Don't know how to process transaction line: $l\n";
+	    die "Don't know how to process transaction line with type $i->TYPE\n";
 	}
     }
     print_tags 2, @cur_txn_tags;
+
     if ($total_postings == 1) {
 	if (defined $ledger_bucket) {
 	    # We only saw one posting and a ledger bucket is defined
-	    push_line 1, map_account $ledger_bucket;
+	    push_line 1, $ledger_bucket;
 	} else {
 	    # Transactions can have a single posting as long as the
 	    # amount is 0 (otherwise it would fail to balance).  This
 	    # can be used to add standalone balance assertions.
-	    # In theory, we should check that the amount == 0, but
-	    # the transaction would fail to balance in ledger if
-	    # that wasn't the case.
 	    # If there's an amount (it has to be zero), print
 	    # the transaction (using a second posting with the
 	    # same account name) because it might contain an
 	    # interesting narration.  If there's no amount,
 	    # just use the balance assertion.
-	    if ($has_amount) {
-		push_line 1, map_account $accounts[0];
+	    if (defined $postings[0]->[AMOUNT] && $postings[0]->[AMOUNT]->[NUMBER] == 0.00) {
+		push_line 1, $postings[0]->[ACCOUNT];
 	    } else {
 		print_line 0, pp_cur_assertions if @cur_txn_assertions;
 		pop_txn();
@@ -970,20 +1243,20 @@ sub process_txn(@) {
     } elsif ($total_postings == 2 && $postings_with_amount == 2) {
 	# Handle implicit conversions.  We only support simple implicit
 	# conversions with 2 postings.
-	my $amount1;
-	my $commodity1;
-	foreach my $l (@cur_txn_lines) {
-	    # Parse beancount posting to get the amount and commodity
-	    if ($l =~ /^\s+([*!]\s+)?[\p{Uppercase_Letter}][^\s]+\s+-?([\d.]+ ([A-Z][A-Z0-9_'.-]*[A-Z0-9](\s*[@\{])?))/) {
-		last if $4; # skip if we have a cost or price
-		my $match = $2;
-		if (!$amount1) {
-		    $commodity1 = $3;
-		    $amount1 = $match;
-		} else {
-		    next if $commodity1 eq $3;
-		    $l =~ s/$match/$match @@ $amount1/;
-		}
+
+	# If there's a cost or price on any of the postings, it's not
+	# an implicit conversion.  Same if the currencies on both
+	# postings are the same.
+	if (!$postings[0]->[COST]->[AMOUNT] && !$postings[1]->[COST]->[AMOUNT] &&
+	    !$postings[0]->[PRICE]->[AMOUNT] && !$postings[0]->[PRICE]->[AMOUNT] &&
+	    $postings[0]->[AMOUNT]->[CURRENCY] ne $postings[1]->[AMOUNT]->[CURRENCY]) {
+	    my $amount = pp_amount $postings[0]->[AMOUNT];
+	    my $price = pp_amount $postings[1]->[AMOUNT];
+	    $price =~ s/^-//;  # Prices must never be negative
+	    # We look for a posting that contains the amount and add the
+	    # price.
+	    foreach my $l (@cur_txn_lines) {
+		$l =~ s/$amount/$amount @@ $price/ if $l =~ /^\s+([*!]\s+)?[\p{Uppercase_Letter}][^\s]+\s+$amount/;
 	    }
 	}
     }
@@ -1012,7 +1285,12 @@ open my $input, $ARGV[0] or die "Can't read $ARGV[0]";
 my @input = <$input>;
 close $input;
 
-my $year; # To store year declaration
+# To store year declaration
+my $year = POSIX::strftime "%Y", localtime;
+# The year to be used if there's no "apply year" in force; this is either
+# the current year (or no date was specified) or whatever was last
+# specified using the Y/year directive.
+my $year_no_apply = $year;
 
 while (@input) {
     my $l = shift @input;
@@ -1056,9 +1334,16 @@ while (@input) {
     } elsif ($l =~ /^[!@]?apply\s+(?<type>account)\s+(?<val>.*)/) {  # apply account
 	$after_auto = 1;
 	push @ledger_apply, [$+{type}, $+{val}];
-    } elsif ($l =~ /^[!@]?apply\s+(?<type>(fixed|rate))\s+(?<val>.*)/) {  # apply fixed
+    } elsif ($l =~ /^[!@]?apply\s+(?<type>(fixed|rate))\s+(?<commodity>[^\s]+)\s*(?<fixed>.+)/) {  # apply fixed
 	$after_auto = 1;
-	push @ledger_apply, ["fixed", $+{val}];
+	my $fixated->[CURRENCY] = $+{commodity};
+	my $rest;
+	($fixated->[AMOUNT], $rest) = get_amount $+{fixed};
+	$fixated->[TYPE] = 1;
+	if ($rest) {
+	    die "Unknown rest $rest in apply $+{type} directive: $l";
+	}
+	push @ledger_apply, ["fixed", $fixated];
     } elsif ($l =~ /^[!@]?apply\s+(?<type>tag)\s+(?<val>.*)/) {  # apply tag
 	$after_auto = 1;
 	# `apply tag` can be converted to beancount in three ways:
@@ -1088,15 +1373,18 @@ while (@input) {
 	    print_line $depth, "poptag " . pp_tag_link ${$a}[1]
 	} elsif (${$a}[0] eq "year") {
 	    # apply year can be nested, so restore the previous year
+	    my $found = 0;
 	    foreach my $a (reverse @ledger_apply) {
 		if (${$a}[0] eq "year") {
 		    $year = ${$a}[1];
+		    $found = 1;
 		    last;
 		}
 	    }
+	    $year = $year_no_apply if !$found;
 	}
     } elsif ($l =~ /^[!@]?(bucket|A)\s+(.*)/) {  # bucket
-	$ledger_bucket = $2;
+	$ledger_bucket = map_account $2;
     } elsif ($l =~ /^[!@]?(comment|test)/) {  # block comment
 	$l = shift @input;
 	# block comments may or may not be indented.  If the first line has
@@ -1116,15 +1404,15 @@ while (@input) {
 	print_comment_top_level 0, $l;
     } elsif ($l =~ /^(Y\s*|year\s+)(\d{4})/) {  # year declaration
 	$year = $2;
+	$year_no_apply = $2;
     } elsif ($l =~ /^$price_RE/) {
 	$after_auto = 1;
 	$l = sprintf "%s price %s ", pp_date($+{date}, $year), map_commodity $+{commodity1};
-	if ($+{commodity2} =~ /$amount_RE/) {
-	    $l .= pp_amount $+{minus}, $+{num}, $+{commodity}, $+{inline_math};
-	} else {
-	    die "Can't parse second commodity in price directive: $+{commodity2}";
+	my ($commodity2, $rest) = get_amount $+{commodity2};
+	$l .= pp_amount $commodity2;
+	if ($rest) {
+	    die "Unknown rest $rest in price directive: $l";
 	}
-	$l =~ s/"//g;
 	print_line $depth, $l;
     } elsif ($l =~ /^([=~].*)/) {  # automated transaction (=) or periodic transaction (~)
 	$after_auto = 1;
@@ -1206,6 +1494,10 @@ while (@input) {
 	    ($depth, $l) = strip_indentation $l;
 	    print_comment_top_level $depth, $l;
 	}
+    } elsif ($l =~ /^[!@]?(import\s+)/) {  # import (Python)
+	# There's no equivalent
+	($depth, $l) = strip_indentation $l;
+	print_comment_top_level $depth, $l;
     } elsif ($l =~ /^[!@]?(python)/) {  # Python
 	$after_auto = 1;
 	# The python directive is special in the sense that empty

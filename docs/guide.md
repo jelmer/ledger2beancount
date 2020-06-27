@@ -1,186 +1,10 @@
----
-# SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
-title: ledger2beancount
-subtitle: Ledger to Beancount converter
-author:
-    - Stefano Zacchiroli
-    - Martin Michlmayr
-keywords: ledger, beancount, conversion, accounting, bookkeeping
-date: May 2020
-documentclass: scrartcl
-urlcolor: blue
-toc: true
----
-
-# Introduction
-
-ledger2beancount is a script to automatically convert
-[Ledger](https://www.ledger-cli.org/)-based textual ledgers to
-[Beancount](http://furius.ca/beancount/) ones.
-
-Conversion is based on (concrete) syntax, so that information that is not
-meaningful for accounting reasons but still valuable (e.g., comments,
-formatting, etc.) can be preserved.
-
-ledger2beancount aims to be compatible with the latest official release of
-beancount.
-
-
-# Installation
-
-ledger2beancount is a Perl script and relies on the following Perl
-modules:
-
-* `Config::Onion`
-* `Date::Calc`
-* `DateTime::Format::Strptime`
-* `File::BaseDir`
-* `Getopt::Long::Descriptive`
-* `String::Interpolate`
-* `YAML::XS`
-
-You can install the required Perl modules with
-[cpanminus](https://metacpan.org/pod/distribution/App-cpanminus/bin/cpanm):
-
-    cpanm --installdeps .
-
-If you use Debian, you can install the dependencies with this command:
-
-    sudo apt install libconfig-onion-perl libdate-calc-perl \
-        libfile-basedir-perl libyaml-libyaml-perl \
-        libgetopt-long-descriptive-perl libdatetime-format-strptime-perl \
-        libstring-interpolate-perl
-
-Note that `String::Interpolate` (`libstring-interpolate-perl`) is not
-in Debian stable.
-
-ledger2beancount itself consists of one script.  You can clone the
-repository and run the script directly or copy it to `$HOME/bin` or
-a similar location:
-
-    git clone https://github.com/zacchiro/ledger2beancount/
-    ./bin/ledger2beancount examples/simple.ledger
-
-## Arch Linux
-
-ledger2beancount is available on [AUR](https://aur.archlinux.org/packages/ledger2beancount/).
-
-## Debian
-
-ledger2beancount is [available in Debian](https://packages.debian.org/ledger2beancount).
-
-## macOS
-
-You can install `cpanm` from Homebrew:
-
-    brew install cpanminus
-
-## Microsoft Windows
-
-You can install [Strawberry Perl](http://strawberryperl.com/) on Windows
-and use `cpanm` as described above to install the required Perl modules.
-ledger2beancount is not packaged for Windows but you can clone this Git
-repository and run the script.
-
-# Configuration
-
-ledger2beancount can use a configuration file.  It will search for
-the config file `ledger2beancount.yml` in the current working directory.
-If that file is not found, it will look for
-`$HOME/.config/ledger2beancount/config.yml`.  You can also pass an
-alternative config file via `--config/-c`.  The file must end in `.yml`
-or `.yaml`.  See the sample config file for the variables you can use.
-
-While the configuration file is optional, you may have to define a
-number of variables for ledger2beancount to work correctly with your
-ledger files:
-
-* `ledger_indent` sets the indentation level used in your ledger file
-  (by default `4`).
-* `date_format` has to be configured if you don't use the date format
-  `YYYY-MM-DD`.
-* `decimal_comma` has to be set to `true` if you use commas as the
-  decimal separator (for example, `10,12 EUR` meaning 10 Euro and
-  12 cents).
-* `commodity_map` defines mappings from ledger to beancount commodities.
-  You have to set this if you use commodity codes like `€` or `£` (to
-  map them to `EUR` and `GBP`, respectively).
-
-Additionally, these options are useful to configure beancount:
-
-* `operating_currencies`: a list of the currencies you frequently use.
-* `beancount_header`: a file which is embedded at the beginning of
-   the converted beancount file which can include beancount `option`
-   statements, `plugin` directives, `query` information and more.
-
-Other variables can be set to use various functionality offered by
-ledger2beancount.  Please read the [section on features](#features)
-to learn about these variables and refer to the [complete list of
-configuration options](#configuration-options) at the end of the
-manual.
-
-
-# Usage
-
-ledger2beancount accepts input from `stdin` or from a file and will write
-the converted data to `stdout`.  You can run ledger2beancount like this
-on the example provided:
-
-    ledger2beancount examples/simple.ledger > simple.beancount
-
-After you convert your ledger file, you should validate the generated
-beancount file with `bean-check` and fix all errors:
-
-    bean-check simple.beancount
-
-You should also inspect the generated beancount file to see if it
-looks correct to you.  Please note that ledger2beancount puts notes
-at the beginning of the generated beancount file if it encounters
-problems with the conversion.
-
-If you believe that ledger2beancount could have produced a better
-conversion or if you get an error message from ledger2beancount, please
-[file a bug](https://github.com/zacchiro/ledger2beancount/issues) along
-with a simple test case.
-
-You can pipe the output of ledger2beancount to beancount's bean-format
-if you want to use the conversion as an opportunity to reformat your
-file.
-
-
-# Beancount compatibility
-
-The syntax of beancount is quite stable but it's expected to become
-slightly less restrictive as some missing features are implemented (such
-as posting-level tags).
-
-ledger2beancount aims to be compatible with the latest official release
-of beancount, but some functionality may require an unreleased version of
-beancount.  You can install the latest development version of beancount
-directly from the beancount repository:
-
-    pip3 install git+https://github.com/beancount/beancount/
-
-Currently, there are no features that require an unreleased version of
-beancount.
-
-ledger2beancount is largely compatible with Beancount 2.0.  If you
-use the following features, you need Beancount 2.1:
-
-* UTF-8 letters and digits in account names
-* Full-line comments in transactions
-* Transaction tags on multiple lines
-
-
-# Features
+# User guide
 
 ledger2beancount supports most of the syntax from ledger.  It also offers
 some features to improve the conversion from ledger to beancount.
 
 If you're new to beancount, we suggest you read this section in parallel
-to the [illustrated ledger file provided](../examples/illustrated.ledger).
+to the [illustrated ledger file](https://github.com/beancount/ledger2beancount/blob/master/examples/illustrated.ledger).
 This example ledger file explains differences between ledger and beancount,
 shows how ledger syntax is converted to beancount and describes how you
 can use the features described in this section to improve the conversion
@@ -189,13 +13,15 @@ subsections as this section, so it's easy to follow in parallel.
 
 You can convert the illustrated ledger file to beancount like this:
 
-    ledger2beancount --config examples/illustrated.yml examples/illustrated.ledger
+```shell
+ledger2beancount --config examples/illustrated.yml examples/illustrated.ledger
+```
 
 But please be aware that it doesn't pass `bean-check`.  See the comments in
 the file as to why.
 
 Note on **regular expressions**: many of the features described below require
-you to specify regular expressions in ledger2beancount configuration file. The
+you to specify regular expressions in ledger2beancount configuration file.  The
 expected syntax (and semantics) for all such values is that of
 [Perl regular expressions](https://perldoc.perl.org/perlre.html#Regular-Expressions).
 
@@ -244,9 +70,11 @@ account names.  If you use the top-level root name `Accrued` to
 track accounts payable and accounts receivable, you can rename them
 with this `account_regex` config option:
 
-    account_regex:
-      ^Accrued:Accounts Payable:(.*): Liabilities:Accounts-Payable:$1
-      ^Accrued:Accounts Receivable:(.*): Assets:Accounts-Receivable:$1
+```yaml
+account_regex:
+  ^Accrued:Accounts Payable:(.*): Liabilities:Accounts-Payable:$1
+  ^Accrued:Accounts Receivable:(.*): Assets:Accounts-Receivable:$1
+```
 
 Ledger's `apply account` and `alias` directives are supported.  The
 mapping of account names described above is done after these directives.
@@ -269,7 +97,9 @@ beancount.
 
 Ledger allows amounts without commodities, e.g.:
 
+```ledger
     Assets:Test                         10.00
+```
 
 While this is allowed in ledger (but not in beancount), it's not
 recommended and ledger2beancount does not support amounts without
@@ -316,10 +146,17 @@ flags](https://www.ledger-cli.org/3.0/doc/ledger3.html#State-flags)).
 ## Dates
 
 ledger supports a wide range of date formats whereas beancount requires
-all dates in the format `YYYY-MM-DD` (ISO 8601).  The variable
-`date_format` has to be set if you don't use ISO 8601 for the dates in
-your ledger file.  `date_format` uses the same format as the ledger
-options `--input-date-format` and `--date-format` (see `man 1 date`).
+all dates in the format `YYYY-MM-DD` (ISO 8601).  ledger2beancount
+automatically recognizes the default date formats from ledger:
+
+* `YYYY-YY-DD`
+* `YYYY/MM/DD`
+* `MM/DD` (without year)
+
+The variable `date_format` has to be set if you don't use any of these
+date formats in your ledger file.  `date_format` uses the same format
+as the ledger options `--input-date-format` and `--date-format` (see
+`man 1 date`).
 
 Ledger allows dates without a year if the year is declared using the
 `Y`, `year` and `apply year` directives.  If `date_format_no_year` is
@@ -366,7 +203,9 @@ change the type from string to integer, you can simply post-process the
 generated beancount file to remove the quotation marks around the codes.
 For example, if `code_tag` is set to `code`, you can use this Perl call:
 
-    perl -pi -e 's/^(\s+code: )"(\d+)"$/$1$2/' *.beancount
+```shell
+perl -pi -e 's/^(\s+code: )"(\d+)"$/$1$2/' *.beancount
+```
 
 
 ## Narration
@@ -396,16 +235,22 @@ allow you to split ledger's payee field into payee and narration.  You
 have to use regular expressions with the named capture groups `payee`
 and `narration`.  For example, given the ledger transaction header
 
-    2018-03-18 * Supermarket (Tesco)
+```ledger
+2018-03-18 * Supermarket (Tesco)
+```
 
 and the configuration
 
-    payee_split:
-      - (?<narration>.*?)\s+\((?<payee>Tesco)\)
+```yaml
+payee_split:
+  - (?<narration>.*?)\s+\((?<payee>Tesco)\)
+```
 
 ledger2beancount will create this beancount transaction header:
 
-    2018-03-18 * "Tesco" "Supermarket"
+```beancount
+2018-03-18 * "Tesco" "Supermarket"
+```
 
 In other words, `payee_split` allows you to split the ledger payee
 into payee and narration in beancount.  `payee_split` is a list of
@@ -417,16 +262,22 @@ payee field and assign payees according to the match.  This variable
 is a list consisting of regular expressions and the corresponding
 payees.  For example, if your ledger contains a transaction like:
 
-    2018-03-18 * Oyster card top-up
+```ledger
+2018-03-18 * Oyster card top-up
+```
 
 you can use
 
-    payee_match:
-      - ^Oyster card top-up: Transport for London
+```yaml
+payee_match:
+  - ^Oyster card top-up: Transport for London
+```
 
 to match the line and assign the payee `Transport for London`:
 
-    2018-03-18 * "Transport for London" "Oyster card top-up"
+```beancount
+2018-03-18 * "Transport for London" "Oyster card top-up"
+```
 
 Unlike `payee_split`, the full payee field from ledger is used as the
 narration in beancount.  Again, ledger2beancount stops after the first
@@ -447,8 +298,10 @@ The regular expressions from `payee_split` and `payee_match` are evaluated
 in a case sensitive manner by default.  If you want case insensitive
 matches, you can prefix your pattern with `(?i)`, for example:
 
-    payee_match:
-      - (?i)^Oyster card top-up: Transport for London
+```yaml
+payee_match:
+  - (?i)^Oyster card top-up: Transport for London
+```
 
 Finally, metadata describing a payee or payer will be used to set the
 payee.  The tags used for that information can be specified in
@@ -470,7 +323,7 @@ Beancount is more restrictive than ledger in what it allows as metadata
 keys.  ledger2beancount will automatically convert metadata keys to valid
 beancount metadata keys.  This involves replacing all invalid characters
 with a dash and making sure the first character is a lowercase letter
-(either by lowercasing a letter or adding the prefix `x`).
+(either by making the letter into lowercase or adding the prefix `x`).
 
 ledger2beancount also supports
 [typed metadata](https://www.ledger-cli.org/3.0/doc/ledger3.html#Typed-metadata)
@@ -509,21 +362,29 @@ First, you can define a list of metadata tags in `link_tags` whose
 values should be converted to beancount links instead of metadata.  For
 example:
 
-    link_tags:
-      - Invoice
+```yaml
+link_tags:
+  - Invoice
+```
 
 with the ledger input
 
-    2018-03-19 * Invoice 4
-        ; Invoice:: 4
+```ledger
+2018-03-19 * Invoice 4
+    ; Invoice:: 4
+```
 
 will be converted to
 
-    2018-03-19 * Invoice 4 ^4
+```beancount
+2018-03-19 * Invoice 4 ^4
+```
 
 instead of
 
-    2018-03-19 * Invoice 4 #4
+```beancount
+2018-03-19 * Invoice 4 #4
+```
 
 Tags are case insensitive.  Be aware that the metadata must not contain
 any whitespace.
@@ -535,22 +396,29 @@ Second, you can define regular expressions in `link_match` to determine
 that a tag should be rendered as a link instead.  For example, if you
 tag your trips in the format `YYYY-MM-DD-foo`, you could use
 
-    link_match:
-      - ^\d\d\d\d-\d\d-\d\d-
+```yaml
+link_match:
+  - ^\d\d\d\d-\d\d-\d\d-
+```
 
 to render them as links.  So the ledger transaction header
 
-    2018-02-02 * Train Brussels airport to city
-        ; :2018-02-02-brussels-fosdem:debian:
+```ledger
+2018-02-02 * Train Brussels airport to city
+    ; :2018-02-02-brussels-fosdem:debian:
+```
 
 would become the following in beancount:
 
-    2018-02-02 * "Train Brussels airport to city" ^2018-02-02-brussels-fosdem #debian
+```beancount
+2018-02-02 * "Train Brussels airport to city" ^2018-02-02-brussels-fosdem #debian
+```
 
 
 ## Comments
 
-Comments are supported.
+ledger2beancount supports all types of comments from ledger, including
+comments between transactions, on postings and between postings.
 
 Currently, beancount doesn't accept top-level comments with the `|` marker
 ([issue 282](https://github.com/beancount/beancount/issues/282)).
@@ -571,15 +439,24 @@ as regular prices).
 Lot costs and prices are supported, including per-unit and total lot
 costs.  Lot dates and lot notes are converted to beancount.
 
+Ledger allows [lot value expressions](https://www.ledger-cli.org/3.0/doc/ledger3.html#Lot-value-expressions)
+to indicate how to calculate the value of commodities.  Lot value
+expressions are ignored by ledger2beancount since there's no
+equivalence in beancount.
+
 The behaviour of ledger and beancount is different when it comes to
 costs.  In ledger, the statement
 
+```ledger
     Assets:Test          10.00 EUR @ 0.90 GBP
+```
 
 creates the lot `10.00 EUR {0.90 GBP}`.  In beancount, this is not the
 case and a cost is only associated if done so explicitly:
 
-    Assets:Test          10.00 EUR {0.90 GBP}
+```beancount
+  Assets:Test          10.00 EUR {0.90 GBP}
+```
 
 This makes automatic conversion tricky because some statements should be
 simple conversions without associating a cost whereas it's vital to
@@ -601,6 +478,34 @@ cash value.  Both of these variables expect beancount commodities, i.e.
 after transformation and mapping.  (Note that beancount itself uses the
 terms "commodity" and "currency" interchangeably.)
 
+Finally, lots are possible without a cost.  For example, you can use
+a lot note to track a specific voucher:
+
+```ledger
+2020-06-23 * Voucher
+    Assets:Voucher        100.00 EUR (48H5)
+    Assets:Cash          -100.00 EUR
+```
+
+The same appears to be allowed in beancount (but [look at this
+issue](https://github.com/beancount/beancount/issues/482)) and
+ledger2beancount makes the syntax conversion automatically.
+However, ledger also allows the creation of a lot with just a date:
+
+```ledger
+2020-06-23 * Voucher
+    Assets:Voucher        100.00 EUR [2020-06-22]
+    Assets:Cash          -100.00 EUR
+```
+
+Beancount does not allow a lot with a date but no cost.  Therefore, the
+amount is used as the cost:
+
+```beancount
+2020-06-23 * "Voucher"
+  Assets:Voucher        100.00 EUR {{100.00 EUR, 2020-06-22}}
+  Assets:Cash          -100.00 EUR
+```
 
 ## Balance assertions and assignments
 
@@ -619,18 +524,22 @@ assignments](https://www.ledger-cli.org/3.0/doc/ledger3.html#Balance-assignments
 ledger2beancount can handle some, but not all types of balance
 assertions.  The most simple case is something like:
 
-    2012-03-10 KFC
-        Expenses:Food                $20.00
-        Assets:Cash                         = $50.00
+```ledger
+2012-03-10 KFC
+    Expenses:Food                $20.00
+    Assets:Cash                         = $50.00
+```
 
 which can be handled like a balance assertion.  However, ledger also
 allows transactions with two null postings when there's a balance
 assignment, as in:
 
-    2012-03-10 KFC
-        Expenses:Food                $20.00
-        Expenses:Drink
-        Assets:Cash                         = $50.00
+```ledger
+2012-03-10 KFC
+    Expenses:Food                $20.00
+    Expenses:Drink
+    Assets:Cash                         = $50.00
+```
 
 This can't be handled by ledger2beancount.  While ledger can calculate
 how much you spent in `Assets:Cash` and balance it with `Expenses:Drink`,
@@ -641,9 +550,11 @@ Finally, ledger allows [transactions solely consisting of two null
 postings](https://www.ledger-cli.org/3.0/doc/ledger3.html#Resetting-a-balance)
 when one has a balance assignment:
 
-    2012-03-10 Adjustment
-        Assets:Cash                         = $500.00
-        Equity:Adjustments
+```ledger
+2012-03-10 Adjustment
+    Assets:Cash                         = $500.00
+    Equity:Adjustments
+```
 
 ledger2beancount will create a beancount `pad` statement, followed by a
 `balance` statement the following day, to set the correct balance.
@@ -685,20 +596,31 @@ map these account names.
 
 ## Inline math
 
-Very simple inline math is supported in postings.  Specifically, basic
-multiplications and divisions are supported, such as shown in the
-following transactions:
+Ledger supports inline math in transactions:
 
-    2018-03-26 * Simple inline math
-        Assets:Test1            1 GBP @ (1/1.14 EUR)
-        Assets:Test2                       -0.88 EUR
+```ledger
+2018-03-26 * Inline math
+    Assets:Test1            1 GBP @ (1/1.14 EUR)
+    Assets:Test2                       -0.88 EUR
+```
 
-    2018-03-26 * Simple inline math
-        Assets:Test1                     (1 * 3 GBP)
-        Assets:Test2                          -3 GBP
+Beancount also supports inline math, but support is limited to the basic
+arithmetic operations.  Basic math is converted by ledger2beancount to
+the format expected by beancount.  Specifically, the commodity is moved
+from the inline math construct in order to create the "number commodity"
+format expected by beancount.  Since beancount doesn't require round
+brackets to denote inline math, they are dropped as well, resulting in:
 
-Support for more complex inline math would require substantial changes
-to the parser.
+```beancount
+2018-03-26 * "Inline math"
+  Assets:Test1              1 GBP @ 1/1.14 EUR
+  Assets:Test2                       -0.88 EUR
+```
+
+Ledger additionally supports functions in inline math, such as `abs`,
+`rounded`, and `roundto`.  Such complex inline math is not supported
+by beancount.  It will result in a conversion note and an invalid
+beancount file.
 
 
 ## Implicit conversions
@@ -706,12 +628,14 @@ to the parser.
 ledger allows implicit conversions under some circumstances, such as in
 this example:
 
-    2019-01-29 * Implicit conversion
-        Assets:A                 10.00 EUR
-        Assets:B                -11.42 USD
+```ledger
+2019-01-29 * Implicit conversion
+    Assets:A                 10.00 EUR
+    Assets:B                -11.42 USD
+```
 
 They are generally a bad idea since they make it very easy to hide
-problems that are hard to track down.  beancount doesn't support
+problems that are hard to track down.  Beancount doesn't support
 implicit conversions.
 
 ledger2beancount supports implicit conversions if there are only two
@@ -762,19 +686,25 @@ ledger2beancount allows you to define a marker in the config file as
 line, the line will be skipped and not added to the beancount output.
 For example, given the config setting
 
-    ignore_marker: NoL2B
+```yaml
+ignore_marker: NoL2B
+```
 
 you could do this:
 
-    C 1.00 Mb = 1024 Kb ; NoL2B
+```ledger
+C 1.00 Mb = 1024 Kb ; NoL2B
+```
 
 If you want to skip several lines, you can use `$ignore_marker begin`
 and `$ignore_marker end`.  This syntax is also useful for ledger
 `include` directives, which don't allow a comment on the same line.
 
-    ; NoL2B begin
-    include ledger-specific-header.ledger
-    ; NoL2B end
+```ledger
+; NoL2B begin
+include ledger-specific-header.ledger
+; NoL2B end
+```
 
 Since some people use ledger and beancount in parallel using
 ledger2beancount, it is sometimes useful to put beancount-specific
@@ -785,212 +715,23 @@ put it in the output.
 
 Given the input
 
-    ; 2013-11-03 note Liabilities:CreditCard "Called about fraud" ; L2Bonly
+```ledger
+; 2013-11-03 note Liabilities:CreditCard "Called about fraud" ; L2Bonly
+```
 
 ledger2beancount will add the following line to the beancount output:
 
-    2013-11-03 note Liabilities:CreditCard "Called about fraud"
+```beancount
+2013-11-03 note Liabilities:CreditCard "Called about fraud"
+```
 
 You can also use `$keep_marker begin` and `$keep_marker end` to denote
 multiple lines that should be included in the output:
 
-    ; L2Bonly begin
-    ; 2014-07-09 event "location" "Paris, France"
-    ; 2018-09-01 event "location" "Bologna, Italy"
-    ; L2Bonly end
-
-
-# Unsupported features
-
-## Unsupported in beancount
-
-The following features are not supported in beancount and therefore
-commented out during the conversion from ledger to beancount:
-
-* Automated transactions
-* Commodity conversion (`C AMOUNT1 = AMOUNT2`)
-* Commodity format (`D AMOUNT`)
-* Commodity pricing: ignore pricing (`N SYMBOL`)
-* Timeclock support (`I`, `i`, `O`, `o`, `b`, `h`)
-* Periodic transactions
-
-## Unsupported in ledger2beancount
-
-The following ledger features are currently not supported by
-ledger2beancount:
-
-* The `define` directive
-
-Contributions [are welcome!](https://github.com/zacchiro/ledger2beancount/blob/master/docs/contributing.md)
-
-
-# Configuration options
-
-## Input options
-
-The following options may be needed for ledger2beancount to interpret
-your ledger files correctly.
-
-date_format
-
-:   The date format used in your ledger file (default: `%Y-%m-%d`).
-
-date_format_no_year
-
-:   The date format for dates without the year when ledger's `Y`/`year`
-    directive is used (default: `%m-%d`).
-
-ledger_indent
-
-:   Sets the indentation level used in your ledger file (default: `4`).
-
-decimal_comma
-
-:   Parses amounts with the decimal comma (e.g. `10,00 EUR`).  Set this
-    option to `true` if you use option `--decimal-comma` in ledger.
-
-hledger
-
-:   Tells ledger2beancount whether to attempt to parse hledger-specific
-    features.
-
-## Other options
-
-beancount_indent
-
-:   Sets the indentation level for the generated beancount file (default: `2`).
-
-operating_currencies
-
-:   A list of frequently used currencies.  This is used by fava, the web
-    UI for beancount.
-
-automatic_declarations
-
-:   Emit account and commodity declarations. (Default: `true`)
-
-    Note: the declarations done in ledger via `account` and
-    `commodity` declarations are always converted.  If this option
-    is `true`, declarations are created for those which have not
-    been explicitly declared in ledger but used.
-
-account_open_date
-
-:   The date used to open accounts (default: `1970-01-01`).
-
-commodities_date
-
-:   The date used to create commodities (default: `1970-01-01`).
-
-beancount_header
-
-:   Specifies a file which serves as a beancount "header", i.e. it's put
-    at the beginning of the converted beancount file.  You can use such
-    a header to specify options for beancount, such as `option "title"`,
-    define `plugin` directives or beancount `query` information.
-
-ignore_marker
-
-:   Specifies a marker that tells ledger2beancount to ignore a line if the
-    marker is found.
-
-keep_marker
-
-:   Specifies a marker that tells ledger2beancount to take a line from the
-    input that is commented out, uncomment it and display it in the output.
-
-convert_virtual
-
-:   Specifies whether virtual postings should be converted.  If set to
-    `true`, virtual postings in brackets will be made into real accounts.
-    (Virtual postings in parentheses are always ignored, regardless of this
-    option.)
-
-account_map
-
-:   Specifies a hash of account names to be mapped to other account names.
-
-account_regex
-
-:   Specifies a hash of regular expressions to replace account names.
-
-commodity_map
-
-:   Specifies a mapping of ledger commodities to beancount commodities.
-
-metadata_map
-
-:   Specifies a mapping of ledger metadata keys to corresponding beancount keys.
-
-payee_tag
-
-:   Specify a metadata tag (after the mapping done by `metadata_map`) used to set the payee.
-
-payer_tag
-
-:   Specify a metadata tag (after the mapping done by `metadata_map`) used to set the payee.
-
-payee_split
-
-:   Specifies a list of regular expressions to split ledger's payee field
-    into payee and narration.  You have to use the named capture groups
-    `payee` and `narration`.
-
-payee_match
-
-:   Specifies a list of regular expressions and corresponding payees.  The
-    whole ledger payee becomes the narration and the matched payee from the
-    regular expression becomes the payee.
-
-postdate_tag
-
-:   Specifies the metadata tag to be used to store posting dates. (Use the
-    empty string if you don't want the metadata to be added to beancount.)
-
-auxdate_tag
-
-:   Specifies the metadata tag to be used to store auxiliary dates (also
-    known as effective dates; or `date2` in hledger). (Use the empty
-    string if you don't want the metadata to be added to beancount.)
-
-code_tag
-
-:   Specifies the metadata tag to be used to store transaction codes.
-    (Use the empty string if you don't want the metadata to be added to
-    beancount.)
-
-link_match
-
-:   Specifies a list of regular expressions that will cause a tag to be
-    rendered as a link.
-
-link_tags
-
-:   Specifies a list of metadata tags whose values should be converted to
-    beancount links instead of metadata.  Tags are case insensitive and
-    values must not contain whitespace.
-
-currency_is_commodity
-
-:   Specifies a list of commodities that should be treated as commodities
-    rather than currencies even though they consist of 3 characters (which
-    is usually a characteristic of a currency).  Expects beancount
-    commodities (i.e. after transformation and mapping).
-
-commodity_is_currency
-
-:   Specifies a list of commodities that should be treated as currencies
-    (in the sense that cost is not retained).  Expects beancount
-    commodities (i.e. after transformation and mapping).
-
-
-# Bugs and contributions
-
-If you find any bugs in ledger2beancount or believe the conversion from
-ledger to beancount could be improved, please [open an
-issue](https://github.com/zacchiro/ledger2beancount/issues).  Please
-include a small test case so we can reproduce the problem.
-
-See [the contributing guide](contributing.md) for more information on
-how to contribute to ledger2beancount.
+```ledger
+; L2Bonly begin
+; 2014-07-09 event "location" "Paris, France"
+; 2018-09-01 event "location" "Bologna, Italy"
+; L2Bonly end
+```
 

@@ -1,7 +1,9 @@
+---
 # SPDX-FileCopyrightText: © 2018 Stefano Zacchiroli <zack@upsilon.cc>
 # SPDX-FileCopyrightText: © 2018 Martin Michlmayr <tbm@cyrius.com>
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+dist: focal
 language: python
 python:
   - "3.6"
@@ -10,14 +12,18 @@ env:
   - BEANCOUNT="git+https://github.com/beancount/beancount/"
 matrix:
   allow_failures:
-  - env: BEANCOUNT="git+https://github.com/beancount/beancount/"
+    - env: BEANCOUNT="git+https://github.com/beancount/beancount/"
 addons:
   apt:
     packages:
       - cpanminus
       - ledger
+      - yamllint
 install:
   - sudo cpanm --notest --installdeps .
   - pip install $BEANCOUNT
+  - pip install -r requirements.txt
 script:
   - make test
+  - mkdocs build
+  - find -name "*.yml" -exec yamllint {} \;
