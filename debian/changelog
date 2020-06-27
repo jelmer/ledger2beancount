@@ -1,4 +1,4 @@
-ledger2beancount (2.3-1) UNRELEASED; urgency=medium
+ledger2beancount (2.3-1) unstable; urgency=medium
 
   [ Debian Janitor ]
   * New upstream release.
@@ -9,7 +9,7 @@ ledger2beancount (2.3-1) UNRELEASED; urgency=medium
   * Add new dependencies on libenum-perl, liblist-moreutils-perl,
     libregexp-common-perl.
 
- -- Debian Janitor <janitor@jelmer.uk>  Sat, 27 Jun 2020 14:20:54 +0000
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Sat, 27 Jun 2020 17:23:34 +0000
 
 ledger2beancount (2.2-1) unstable; urgency=medium
 
