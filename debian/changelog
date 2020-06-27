@@ -6,6 +6,8 @@ ledger2beancount (2.3-1) UNRELEASED; urgency=medium
   [ Jelmer Vernooĳ ]
   * Update Homepage to readthedocs site, and update
     debian/upstream/metadata to new upstream repository location.
+  * Add new dependencies on libenum-perl, liblist-moreutils-perl,
+    libregexp-common-perl.
 
  -- Debian Janitor <janitor@jelmer.uk>  Sat, 27 Jun 2020 14:20:54 +0000
 
