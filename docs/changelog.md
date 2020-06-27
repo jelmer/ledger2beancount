@@ -1,5 +1,23 @@
 # ledger2beancount releases
 
+## 2.3 (2020-06-26)
+
+* Improve speed of ledger2beancount significantly
+* Improve parsing of postings for accuracy and speed
+* Improve support for inline math
+* Handle lots without cost
+* Fix parsing of lot notes followed by a virtual price
+* Add support for lot value expressions
+* Make parsing of numbers more strict
+* Fix behaviour of dates without year
+* Accept default ledger date formats without configuration
+* Fix implicit conversions with negative prices
+* Convert implicit conversions in a more idiomatic way
+* Avoid introducing trailing whitespace with hledger input
+* Fix loading of config file
+* Skip ledger directive `import`
+* Convert documentation to `mkdocs`
+
 ## 2.2 (2020-05-30)
 
 * Show warning for unknown `apply` directive
@@ -45,7 +63,7 @@
 ## 1.7 (2019-04-22)
 
 * Don't misparse account and commodity with mixed tab/space separators
-* Rename account names consisting of a root name without subaccount
+* Rename account names consisting of a root name without sub-account
 * Warn when non-standard root names are used
 * Avoid duplicate open directives for accounts with name collisions
 * Don't warn for renamed tags that won't show up in the beancount file

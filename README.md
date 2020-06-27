@@ -1,8 +1,7 @@
-[![Build Status](https://travis-ci.org/zacchiro/ledger2beancount.svg?branch=master)](https://travis-ci.org/zacchiro/ledger2beancount)
+[![Build Status](https://travis-ci.org/beancount/ledger2beancount.svg?branch=master)](https://travis-ci.org/beancount/ledger2beancount)
 
 
-ledger2beancount
-================
+# ledger2beancount
 
 A script to automatically convert [Ledger](https://www.ledger-cli.org/)-based
 textual ledgers to [Beancount](http://furius.ca/beancount/) ones.
@@ -11,13 +10,8 @@ Conversion is based on (concrete) syntax, so that information that is not
 meaningful for accounting reasons but still valuable (e.g., comments,
 formatting, etc.) can be preserved.
 
-Please [read the manual](docs/manual.md) on how to install, configure and
-use ledger2beancount.  The [supported features](docs/manual.md#features)
-are documented in the manual, too.
 
-
-Usage
------
+## Usage
 
 ledger2beancount accepts input from `stdin` or from a file and will write
 the converted data to `stdout`.  You can run ledger2beancount like this:
@@ -25,19 +19,23 @@ the converted data to `stdout`.  You can run ledger2beancount like this:
     ledger2beancount test.ledger > test.beancount
 
 
-Installation
-------------
+## Installation
 
-Please see [the manual](docs/manual.md#installation) for dependencies and
-installation instructions.
+Please see [the installation information](docs/installation.md) for
+dependencies and installation instructions.
 
+## Documentation
 
-Features
---------
+ledger2beancount comes with extensive documentation.  You can also [read
+the documentation online](https://ledger2beancount.readthedocs.io/)
+thanks to Read the Docs.
 
-The majority of ledger features are supported by ledger2beancount.  Here
+## Features
+
+The majority of features from ledger are supported by ledger2beancount.  Here
 is an overview of fully supported, partly supported and unsupported features.
-Please refer to [the manual](docs/manual.md#features) for more details.
+Please refer to [the user guide](docs/guide.md) for more details on how to
+use ledger2beancount and to configure it to your needs.
 
 ### Fully supported
 
@@ -66,7 +64,6 @@ Please refer to [the manual](docs/manual.md#features) for more details.
   * State flags (posting flags)
   * Transaction state (transaction flags)
 * Inline math
-  * Very simple inline math only
 * Lots
   * Lot dates
   * Lot notes
@@ -92,11 +89,13 @@ Please refer to [the manual](docs/manual.md#features) for more details.
 * Deferred postings (no equivalence in beancount)
 * Directives
   * `eval`: skipped (not supported in beancount)
+  * `import`: skipped (not supported in beancount)
   * `payee`: skipped (not needed in beancount)
   * `python`: skipped (not supported in beancount)
   * `tag`: skipped (not needed in beancount)
   * `value`: skipped (not supported in beancount)
 * Fixated prices (`=$10` and the `fixed` directive)
+* Lot value expressions (no equivalence in beancount)
 * Tags and links on posting-level (not supported by beancount)
 * Transaction codes: stored as metadata (no equivalence in beancount)
 * Virtual postings: can be skipped or converted to real postings
@@ -118,15 +117,13 @@ Please refer to [the manual](docs/manual.md#features) for more details.
 * Periodic transactions
 
 
-Authors
--------
+## Authors
 
 * Stefano Zacchiroli `<zack@upsilon.cc>`
 * Martin Michlmayr `<tbm@cyrius.com>`
 
 
-License
--------
+## License
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
