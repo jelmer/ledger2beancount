@@ -18,9 +18,9 @@ Index: ledger2beancount/tests/directives.beancount
  ;   - The `define` directive is not supported
  ;   - Unsupported directive `value` skipped
  ;   - The `def` directive is not supported
-@@ -216,18 +215,6 @@ poptag #foo
- ; Ignore pricing information
- ; N EUR
+@@ -222,18 +221,6 @@ poptag #foo
+ 
+ ; import os
  
 -; python
 -;   def print_type(val):
@@ -41,9 +41,9 @@ Index: ledger2beancount/tests/directives.ledger
 ===================================================================
 --- ledger2beancount.orig/tests/directives.ledger
 +++ ledger2beancount/tests/directives.ledger
-@@ -209,18 +209,6 @@ D 1000.00 EUR
- ; Ignore pricing information
- N EUR
+@@ -215,18 +215,6 @@ N EUR
+ 
+ import os
  
 -python
 -  def print_type(val):
