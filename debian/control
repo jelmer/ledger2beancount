@@ -17,7 +17,8 @@ Build-Depends: beancount,
                texlive-latex-recommended, lmodern, texlive-fonts-recommended,
                texlive-latex-extra,
                liblist-moreutils-perl,
-               libregexp-common-perl
+               libregexp-common-perl,
+               libenum-perl
 Rules-Requires-Root: no
 Standards-Version: 4.5.0
 Vcs-Git: https://salsa.debian.org/jelmer/ledger2beancount.git
