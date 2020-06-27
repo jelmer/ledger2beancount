@@ -23,7 +23,7 @@ Rules-Requires-Root: no
 Standards-Version: 4.5.0
 Vcs-Git: https://salsa.debian.org/jelmer/ledger2beancount.git
 Vcs-Browser: https://salsa.debian.org/jelmer/ledger2beancount
-Homepage: https://github.com/zacchiro/ledger2beancount
+Homepage: https://ledger2beancount.readthedocs.io/
 
 Package: ledger2beancount
 Architecture: all
