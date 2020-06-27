@@ -1,8 +1,5 @@
 Tests: testsuite
 Depends: beancount,
          ledger,
-         @,
-         liblist-moreutils-perl,
-         libregexp-common-perl,
-         libenum-perl
+         @
 Restrictions: allow-stderr
