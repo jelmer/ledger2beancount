@@ -1,3 +1,9 @@
+ledger2beancount (2.3-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Debian Janitor <janitor@jelmer.uk>  Sat, 27 Jun 2020 14:20:54 +0000
+
 ledger2beancount (2.2-1) unstable; urgency=medium
 
   [ Debian Janitor ]

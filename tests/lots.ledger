@@ -3,6 +3,7 @@
 ; SPDX-License-Identifier: GPL-3.0-or-later
 
 account Assets:Test
+account Assets:Brokerage
 account Equity:Opening-Balance
 account Income:Capital-Gain
 
@@ -300,4 +301,63 @@ commodity XXXx
     Expenses:Food             20.00 USD
     ; VALUE:: 30 DM
     Assets:Cash              -20.00 USD
+
+2020-06-24 * Implicit conversion
+    ; This is a comment with an amount that should not be substituted -11.42 USD
+    Assets:A                  10.00 EUR ; do not substitute: -11.42 USD
+    Assets:B                 -11.42 USD ; do not substitute: -11.42 USD
+
+2020-06-24 * Implicit conversion
+    ; :foo:
+    Assets:A                 -10.00 EUR
+    Assets:B                  11.42 USD
+
+2012-03-02 KFC
+    Expenses:Food      $1 {{0.90 EUR}} ((2 EUR))
+    Assets:Cash
+
+2012-04-10 My Broker
+    Assets:Brokerage                     $375.00
+    Assets:Brokerage         -5 AAPL {$50.00} ((ten_dollars)) @@ $375.00
+    Income:Capital-Gain                 $-125.00
+
+2012-04-10 My Broker
+    Assets:Brokerage                     $375.00
+    Assets:Brokerage        -5 AAPL {$50.00} ((market)) @@ $375.00
+    Income:Capital-Gain                 $-125.00
+
+2012-04-10 My Broker
+    Assets:Brokerage                     $375.00
+    Assets:Brokerage        -5 AAPL {$50.00} (( market )) @@ $375.00
+    Income:Capital-Gain                 $-125.00
+
+2020-06-20 Lot value expression and virtual price
+    Assets:Brokerage                     $375.00
+    Assets:Brokerage        -5 AAPL {$50.00} ((market)) (@) $75.00
+    Income:Capital-Gain                 $-125.00
+
+2020-06-20 Lot value expression and virtual price
+    Assets:Brokerage                     $375.00
+    Assets:Brokerage        -5 AAPL {$50.00} ((market)) (@@) $375.00
+    Income:Capital-Gain                 $-125.00
+
+2020-06-23 Lot with only lot date
+    Assets:Voucher       137.87 EUR [2020-06-01]
+    Assets:Cash
+
+2020-06-23 Lot with only lot note
+    Assets:Voucher             137.87 GBP (48H5)
+    Assets:Cash               -137.87 GBP
+
+2020-06-23 Lot with only lot date and note
+    Assets:Voucher  137.87 EUR [2020-06-01] (48H5)
+    Assets:Cash
+
+2020-06-23 Lot with only lot value expression
+    Expenses:Food                $1 ((0.90 EUR))
+    Assets:Cash
+
+2020-06-23 * Lot with only lot note and a price
+    Assets:Voucher   10.00 EUR (48H5) @ 1.28 USD
+    Assets:Cash                       -12.80 USD
 

@@ -84,7 +84,7 @@ commodity $
     Assets:Test8                       30.00 EUR
     Equity:Opening-Balance            -30.00 EUR
 
-2020-02-15 * Balance assigment with a single posting
+2020-02-15 * Balance assignment with a single posting
     Assets:Test8                                 = 30.00 EUR
 
 2020-02-15 Specify amount
@@ -95,4 +95,8 @@ bucket Income:Test
 
 2020-02-15 * Balance assertion with a single posting - use bucket to balance
     Assets:Test9                        5.00 EUR = 45.00 EUR
+
+2020-06-22 * Balance assignment with inline math
+  Assets:Test10    1 GBP = (0.25 GBP + 0.75 GBP)
+  Assets:Test11
 
