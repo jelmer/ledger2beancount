@@ -2,13 +2,13 @@
 ; ledger2beancount conversion notes:
 ;
 ;   - Virtual posting in parentheses ignored
-;   - Comment or meta-data on virtual posting preserved as comment
+;   - Comment or metadata on virtual posting preserved as comment
 ;   - Virtual posting in bracket ignored (see convert_virtual option)
 ;   - Metadata key 2012 renamed to x2012
 ;   - Metadata key 2012foo renamed to x2012foo
 ;   - Metadata key Date renamed to date
 ;   - Metadata key Invoice renamed to invoice
-;   - Metadata key TEST1234TEST renamed to tEST1234TEST
+;   - Metadata key TEST1234TEST renamed to test1234test
 ;   - Metadata key Trip renamed to trip
 ;   - Metadata key a renamed to ax
 ;   - Metadata key test:test renamed to test-test
@@ -119,7 +119,7 @@
   Assets:Test
 
 2018-04-12 * "Metadata starting with uppercase letter"
-  tEST1234TEST: "foo"
+  test1234test: "foo"
   Assets:Test                         10.00 EUR
   Assets:Test
 

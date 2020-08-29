@@ -6,3 +6,12 @@ hledger: true
 
 postdate_tag: date
 auxdate_tag: aux-date
+
+commodity_map:
+  ₪: ILS
+  ¥: JPY
+  Ft: HUF
+  Kč: CZK
+  kr: NOK
+  R$: BRL
+  zł: PLN

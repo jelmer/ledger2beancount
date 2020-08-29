@@ -1,10 +1,32 @@
 # ledger2beancount releases
 
+## 2.4 (2020-07-27)
+
+* Fix regressions introduced in version 2.3
+    * Handle price directives with comments
+    * Don't assume implicit conversion when price is on second posting
+* Improve support for hledger
+    * Fix parsing of hledger tags
+    * Support commas as decimal markers
+    * Support digit group marks through `commodity` and `D` directives
+    * Support `end aliases` directive
+    * Support regex aliases
+    * Recognise total balance assertions
+    * Recognise sub-account balance assertions
+* Add support for `define` directive
+* Convert all uppercase metadata tags to all lowercase
+* Improve handling of ledger lots without cost
+* Allow transactions without postings
+* Fix parsing issue in commodity declarations
+* Support commodities that contain quotation marks
+* Add `--version` option to show version
+* Document problem of mixing `apply` and `include`
+
 ## 2.3 (2020-06-26)
 
 * Improve speed of ledger2beancount significantly
 * Improve parsing of postings for accuracy and speed
-* Improve support for inline math
+* Improve support for inline maths
 * Handle lots without cost
 * Fix parsing of lot notes followed by a virtual price
 * Add support for lot value expressions
@@ -21,8 +43,8 @@
 ## 2.2 (2020-05-30)
 
 * Show warning for unknown `apply` directive
-* Recognize `apply rate` directive (an alias of `apply fixed`)
-* Don't convert meta-data on ignored virtual postings but keep as comments
+* Recognise `apply rate` directive (an alias of `apply fixed`)
+* Don't convert metadata on ignored virtual postings but keep as comments
 * Update location of beancount repository
 
 ## 2.1 (2020-04-06)
@@ -104,9 +126,9 @@
 ## 1.2 (2018-05-17)
 
 * Updates for beancount 2.1.0:
-  * Allow UTF-8 letters and digits in account names
-  * Allow full-line comments in transactions
-  * Allow transaction tags and links on multiple lines
+    * Allow UTF-8 letters and digits in account names
+    * Allow full-line comments in transactions
+    * Allow transaction tags and links on multiple lines
 * Handle posting tags on multiple lines
 * Always convert posting-level tags to metadata
 * Improve parsing of the transaction header

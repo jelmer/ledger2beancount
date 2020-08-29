@@ -8,7 +8,7 @@ author:
     - Stefano Zacchiroli
     - Martin Michlmayr
 keywords: ledger, beancount, converter, conversion, accounting, bookkeeping, finance
-date: June 2020
+date: July 2020
 documentclass: scrartcl
 urlcolor: blue
 toc: true
@@ -23,6 +23,11 @@ textual ledgers to [Beancount](http://furius.ca/beancount/) ones.
 Conversion is based on (concrete) syntax, so that information that is not
 meaningful for accounting reasons but still valuable (e.g., comments,
 formatting, etc.) can be preserved.
+
+As input, ledger2beancount supports the file formats from:
+
+* [ledger](https://ledger-cli.org/)
+* [hledger](https://hledger.org/)
 
 ledger2beancount aims to be compatible with the latest official release of
 beancount.
