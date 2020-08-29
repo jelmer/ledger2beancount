@@ -147,7 +147,7 @@ flags](https://www.ledger-cli.org/3.0/doc/ledger3.html#State-flags)).
 
 ledger supports a wide range of date formats whereas beancount requires
 all dates in the format `YYYY-MM-DD` (ISO 8601).  ledger2beancount
-automatically recognizes the default date formats from ledger:
+automatically recognises the default date formats from ledger:
 
 * `YYYY-YY-DD`
 * `YYYY/MM/DD`
@@ -162,7 +162,7 @@ Ledger allows dates without a year if the year is declared using the
 `Y`, `year` and `apply year` directives.  If `date_format_no_year` is
 set, ledger2beancount can convert such dates to `YYYY-MM-DD`.
 
-Posting-level dates are recognized by ledger2beancount and stored as
+Posting-level dates are recognised by ledger2beancount and stored as
 metadata according to the `postdate_tag` (`date` by default) but this
 has no effect in beancount.  There is
 [a proposal](https://docs.google.com/document/d/1x0qqWGRHi02ef-FtUW172SHkdJ8quOZD-Xli7r4Nl_k/)
@@ -433,6 +433,12 @@ costs](https://www.ledger-cli.org/3.0/doc/ledger3.html#Virtual-posting-costs)
 ledger2beancount therefore treats them as regular costs (or, rather,
 as regular prices).
 
+Please note that by default all prices are treated as virtual prices
+in beancount.  That is, unlike in ledger, price information (`@` and
+`@@`) is not automatically entered in the price database (pricedb
+in ledger).  This only happens when the `implicit_prices` plugin is
+enabled.
+
 
 ## Lots
 
@@ -478,8 +484,8 @@ cash value.  Both of these variables expect beancount commodities, i.e.
 after transformation and mapping.  (Note that beancount itself uses the
 terms "commodity" and "currency" interchangeably.)
 
-Finally, lots are possible without a cost.  For example, you can use
-a lot note to track a specific voucher:
+Finally, lots are possible without a cost in ledger.  For example, you
+can use a lot note to track a specific voucher:
 
 ```ledger
 2020-06-23 * Voucher
@@ -487,25 +493,15 @@ a lot note to track a specific voucher:
     Assets:Cash          -100.00 EUR
 ```
 
-The same appears to be allowed in beancount (but [look at this
-issue](https://github.com/beancount/beancount/issues/482)) and
-ledger2beancount makes the syntax conversion automatically.
-However, ledger also allows the creation of a lot with just a date:
-
-```ledger
-2020-06-23 * Voucher
-    Assets:Voucher        100.00 EUR [2020-06-22]
-    Assets:Cash          -100.00 EUR
-```
-
-Beancount does not allow a lot with a date but no cost.  Therefore, the
-amount is used as the cost:
+This is not supported in beancount (see [issue #482](https://github.com/beancount/beancount/issues/482))
+and therefore the amount is used as the cost:
 
 ```beancount
 2020-06-23 * "Voucher"
-  Assets:Voucher        100.00 EUR {{100.00 EUR, 2020-06-22}}
+  Assets:Voucher        100.00 EUR {{100.00 EUR, "48H5"}}
   Assets:Cash          -100.00 EUR
 ```
+
 
 ## Balance assertions and assignments
 
@@ -594,9 +590,9 @@ often not the case for virtual postings, so you will have to rename or
 map these account names.
 
 
-## Inline math
+## Inline maths
 
-Ledger supports inline math in transactions:
+Ledger supports inline maths in transactions:
 
 ```ledger
 2018-03-26 * Inline math
@@ -604,12 +600,12 @@ Ledger supports inline math in transactions:
     Assets:Test2                       -0.88 EUR
 ```
 
-Beancount also supports inline math, but support is limited to the basic
-arithmetic operations.  Basic math is converted by ledger2beancount to
+Beancount also supports inline maths, but support is limited to the basic
+arithmetic operations.  Basic maths is converted by ledger2beancount to
 the format expected by beancount.  Specifically, the commodity is moved
-from the inline math construct in order to create the "number commodity"
+from the inline maths construct in order to create the "number commodity"
 format expected by beancount.  Since beancount doesn't require round
-brackets to denote inline math, they are dropped as well, resulting in:
+brackets to denote inline maths, they are dropped as well, resulting in:
 
 ```beancount
 2018-03-26 * "Inline math"
@@ -617,8 +613,8 @@ brackets to denote inline math, they are dropped as well, resulting in:
   Assets:Test2                       -0.88 EUR
 ```
 
-Ledger additionally supports functions in inline math, such as `abs`,
-`rounded`, and `roundto`.  Such complex inline math is not supported
+Ledger additionally supports functions in inline maths, such as `abs`,
+`rounded`, and `roundto`.  Such complex inline maths is not supported
 by beancount.  It will result in a conversion note and an invalid
 beancount file.
 
@@ -663,15 +659,35 @@ The syntax of [hledger](http://hledger.org/) is largely compatible with
 that of ledger.  If the `hledger` config option is set to `true`,
 ledger2beancount will look for some hledger specific features:
 
-1) hledger allows the [separation of a transaction's description into
+1. hledger allows the [separation of a transaction's description into
    payee and note](http://hledger.org/journal.html#payee-and-note)
    (narration) using the pipe character (`payee | narration`).
 
-2) hledger allows `date:` and `date2:` to specify [posting dates](http://hledger.org/journal.html#posting-dates)
+2. hledger allows `date:` and `date2:` to specify [posting dates](http://hledger.org/journal.html#posting-dates)
    in posting comments in addition to ledger's `[date=date2]` syntax.
 
-3) The syntax of tags is different in hledger: `tag1: tag2:, tag3:` in
+3. The syntax of tags is different in hledger: `tag1:, tag2:, tag3:` in
    hledger vs `:tag1:tag2:tag3:` in ledger.
+
+4. Commas are supported as decimal markers when a number contains
+   only a comma and no period.
+
+5. The `end aliases` directive to clear all defined account aliases is
+   supported.
+
+6. Account aliases can be regular expressions.
+
+7. Total balance assertions (`==`) are recognised, but since there's
+   no equivalent in beancount they are treated as regular balance
+   assertions.
+
+8. Sub-account balance assertions (`=*` and `==*`) are recognised
+   but ignored since there's no equivalent in beancount.
+
+9. Digit group marks (space, comma, and period) are supported and
+   the format information from `commodity` and `D` directives is used
+   to convert the numbers correctly into the format required in
+   beancount.
 
 
 ## Ignoring certain lines

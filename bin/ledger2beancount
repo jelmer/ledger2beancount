@@ -22,11 +22,13 @@ use DateTime::Format::Strptime qw/strftime/;
 use File::BaseDir qw/config_home/;
 use Getopt::Long::Descriptive;
 use List::MoreUtils qw(uniq);
-use Memoize;
+use Memoize qw/memoize flush_cache/;
 use POSIX qw/ceil/;
 use Regexp::Common;
 use String::Interpolate qw(safe_interpolate);
 use Unicode::Normalize;
+
+my $VERSION = "2.4";
 
 memoize('map_account');
 memoize('map_commodity');
@@ -40,8 +42,10 @@ my ($opt, $usage) = describe_options(
     "ledger2beancount %o <ledger-file>",
     [ "config|c=s", "configuration file", ],
     [ "help|h",     "print usage message and exit", { shortcircuit => 1 } ],
+    [ "version|V",  "show version and exit", ],
 );
 
+print("ledger2beancount $VERSION\n"), exit if $opt->version;
 print($usage->text), exit if $opt->help;
 
 my @config_files = ('ledger2beancount.yml', config_home('ledger2beancount', 'config.yml'));
@@ -95,27 +99,22 @@ my $flags_RE = qr/[*!]/;
 my $txn_header_RE = qr/^(?<date>$date_RE)(=(?<auxdate>$date_RE))?(\s+|$)(?<flag>$flags_RE)?(\s*\((?<code>[^)]*)\))?\s*(?<narration>.*)/;
 my $hledger_payee_narration_RE = qr/(?<payee>[^|]+?)\s*\|\s*(?<narration>.*)/;
 my $tags_RE = qr/(?<tags>[\w:-]+)/;
-my $hledger_tags_RE = qr/(?<tags>[^ ]+:.*)/;
+my $hledger_tags_RE = qr/(?<key>[^ :]+):\s*(?<value>.*?)/;
 # An account can be pretty much anything but in a posting it has to be
 # followed by two spaces, a tab or new line.
 # To keep the regex simpler, we parse the () and [] for virtual accounts
 # as part of the account name and strip these brackets later.
 my $account_RE = qr/[^\s;][^\t]*?/;
-my $number_RE = qr/([\d,]*\d(\.\d+)?|\.\d+)/;
-my $number_decimal_comma_RE = qr/([\d.]*\d(,\d+)?|,\d+)/;
-if ($config->{decimal_comma}) {
-    $number_RE = $number_decimal_comma_RE;
-}
+my $number_RE = qr/([\d\s,.]*\d([.,]\d+)?|\.\d+|,\d+)/;
 # A quoted commodity ("LU0274208692") can contain anything
 # between quotes.
-my $commodity_quoted_RE = qr/(["'])(?:(?=(\\?))\g{-1}.)*?\g{-2}/;
+my $commodity_quoted_RE = qr/(")(?:(?=(\\?))\g{-1}.)*?\g{-2}/;
 # An unquoted commodity may not contain certain characters
-my $commodity_unquoted_RE = qr/(?!-)[^;\s0-9=)("'{}@*\/+,.-]+/;
+my $commodity_unquoted_RE = qr/(?!-)(?!")[^;\s0-9=)({}@*\/+,.-]+/;
 my $commodity_RE = qr/$commodity_quoted_RE|$commodity_unquoted_RE/;
 my $comment_top_level_RE = qr/[;#%|*]\s?(?<comment>.*?)/;
 my $comment_RE = qr/;\s*(?<comment>.*)/;
 my $metadata_RE = qr/;\s*(?<key>[^\h:][^\h]*?):(?<typed>:)?(\s*$|\s+(?<value>.*))/;
-my $hledger_metadata_RE = qr/(?<key>[^:]+):\s*(?<value>.+)/;
 # Postings: this does not match everything, just ensures a line consists of
 # a posting
 my $posting_RE = qr/((?<flag>$flags_RE)\s+)?(?<account>$account_RE)/;
@@ -138,11 +137,16 @@ my %commodity_declared;
 my @ledger_apply; # Capture open "apply" statements
 my %ledger_alias; # Capture "alias" statements
 my $ledger_bucket; # Use bucket if there's only one posting
+my %ledger_define; # Capture "define" statements
+my %ledger_commodity_format; # Ledger commodity format
+# Store some hleger info
+my @hledger_alias_regex; # regex aliases
 # Conversion notes for users from ledger2beancount
 my @conversion_notes;
 # Keep track of all ledger accounts and commodities to check for
 # collisions after remapping is done.
 my %ledger_accounts;
+my %account_regex_map;
 my %ledger_commodities;
 my %ledger_metadata;
 
@@ -463,6 +467,39 @@ sub push_deferred_meta($) {
 }
 
 
+# Convert numbers in various formats into a standard format
+sub convert_number($$) {
+    my ($number, $currency) = @_;
+
+    if ($config->{decimal_comma}) {
+	$number =~ s/\.//g;
+	$number =~ tr/,/./; # issue #204
+    } elsif ($config->{hledger}) {
+	if (defined $ledger_commodity_format{$currency}) {
+	   my $format = $ledger_commodity_format{$currency};
+	   # We use some shortcuts for the format; basically,
+	   # we just use format to figure out the decimal mark
+	   # character.  We don't care if anything else is in
+	   # the right format.
+	   $number =~ s/\s+//g;
+	   if ($format =~ /,\d+$/) {
+		# Decimal marker: comma
+		$number =~ s/\.//g;
+		$number =~ s/,/./g;
+	   } else {
+		# Decimal marker: period
+		# Something like 9,99,99,999.00 INR isn't accepted
+		$number =~ s/,//g if $number !~ /^(\d,|\d\d\d\d,)+$/;
+	   }
+	} elsif ($number !~ /\./) {
+	    # If there's a comma but no period, the comma is a decimal marker
+	    $number =~ s/,/./;
+	}
+    }
+    return $number;
+}
+
+
 # Handle metadata
 sub handle_metadata($$$) {
     my ($depth, $metadata, $defer) = @_;
@@ -499,19 +536,19 @@ sub handle_metadata($$$) {
 
 # Process hledger tags
 # hledger tags can have values (metadata) or not (tags)
+sub handle_hledger_tags($$$);
 sub handle_hledger_tags($$$) {
     my ($depth, $l, $defer) = @_;
 
-    # hledger doesn't know the ledger :foo:bar: syntax.  However, this
-    # is parsed as tag "foo" (without the colon!) with value "bar:".
-    $l =~ s/^://;
-
-    foreach $_ (split /\s*,\s*/, $l) {
-	if (/$hledger_metadata_RE/) {
-	    if ($+{key} eq "date" || $+{key} eq "date2") {
-		my $key = $+{key};
-		my $date = $+{value};
+    if ($l =~ /^$hledger_tags_RE(,\s*(?<rest>.*))?$/) {
+	my $key = $+{key};
+	my $value = $+{value};
+	my $rest = $+{rest};
+	if ($value) {
+	    $value =~ s/\s+$//;
+	    if ($key eq "date" || $key eq "date2") {
 		my $year = $1 if $cur_txn_header{date} =~ /^(\d{4})-/;
+		my $date = $value;
 		if ($date !~ /^$hledger_date_RE/) {
 		    die "Can't parse date after hledger tag $key: $date";
 		}
@@ -523,17 +560,22 @@ sub handle_hledger_tags($$$) {
 		}
 		push_deferred_meta $depth if !$defer;
 	    } else {
-		handle_metadata $in_postings ? 2 : 1, \%+, $defer;
+		my %meta = ('key' => $key, 'value' => $value);
+		handle_metadata $in_postings ? 2 : 1, \%meta, $defer;
 	    }
 	} else {
-	    s/:$//;
 	    # The $in_postings check is a workaround since there are no posting-level tags
 	    if ($defer || $in_postings) {
-		push @cur_txn_tags, $_;
+		push @cur_txn_tags, $key;
 	    } else {
-		print_tags $depth, $_;
+		print_tags $depth, $key;
 	    }
 	}
+	if ($rest) {
+	  handle_hledger_tags($depth, $rest, $defer);
+	}
+    } else {
+	die "Can't parse hledger tag $l";
     }
 }
 
@@ -543,7 +585,7 @@ sub handle_hledger_tags($$$) {
 sub handle_comment($$$) {
     my ($depth, $l, $defer) = @_;
 
-    if ($config->{hledger} && $l =~ /;\s*(?<comment>.*?)$hledger_tags_RE/) {
+    if ($config->{hledger} && $l =~ /;\s*(?<comment>.*?)(?<tags>$hledger_tags_RE)$/) {
 	handle_hledger_tags $depth, $+{tags}, $defer;
 	my $comment = $+{comment};
 	if ($+{tags}) {
@@ -598,7 +640,13 @@ sub map_metadata($) {
     $key = $config->{metadata_map}{lc $key} if exists $config->{metadata_map}{lc $key};
 
     $key = $config->{metadata_map}{$key} if exists $config->{metadata_map}{$key};
-    $key = lcfirst $key; # Make first letter lowercase
+    # Ensure the first letter is lowercase.  If the ledger tag is all
+    # uppercase, convert the whole string to lowercase.
+    if ($key eq uc $key) {
+	$key = lc $key;
+    } else {
+	$key = lcfirst $key;
+    }
     $key =~ s/^([^\p{letter}])/x$1/; # Make sure first character is a letter
     $key .= "x" if length $key == 1;
     # Work around lack of Unicode support (beancount #161)
@@ -646,7 +694,7 @@ sub map_account($) {
     $account = $config->{account_map}{$account} if exists $config->{account_map}{$account};
     foreach $_ (sort keys %{$config->{account_regex}}) {
 	if ($account =~ s/$_/safe_interpolate($config->{account_regex}{$_})/eg) {
-	    $config->{account_map}{$ledger_account} = $account;
+	    $account_regex_map{$ledger_account} = $account;
 	    last;
 	}
     }
@@ -696,7 +744,7 @@ sub map_commodity($) {
     $ledger_commodities{$commodity} = 1;
 
     $commodity = $config->{commodity_map}{$commodity} if exists $config->{commodity_map}{$commodity};
-    $commodity =~ s/(^")|("$)//g;
+    $commodity =~ s/^(")(.*)\g{-2}$/$2/;
     # Check again after removing the quote
     $commodity = $config->{commodity_map}{$commodity} if exists $config->{commodity_map}{$commodity};
 
@@ -706,7 +754,7 @@ sub map_commodity($) {
     $commodity =~ s/\p{NonspacingMark}//g;
     # Dash (-) is not valid in ledger (even with quoted commodity) but valid
     # in beancount
-    $commodity =~ s/[^a-zA-Z0-9_'.-]/-/g; # Replace disallowed characters
+    $commodity =~ s/[^a-zA-Z0-9_.-]/-/g; # Replace disallowed characters
     $commodity =~ s/^[^\p{letter}]/X/g; # Make sure first character is a letter
     $commodity =~ s/[^\p{letter}\p{number}]$/X/g; # Make sure last character is a letter or number
     $commodity .= "X" if length $commodity == 1;
@@ -811,9 +859,11 @@ sub get_value_expr($) {
     $math =~ s/^\(//;
     $math =~ s/\)$//;
 
-    if ($config->{decimal_comma}) {
-	$math =~ s/\.//g;
-	$math =~ tr/,/./; # issue #204
+    # Apply ledger define statements
+    foreach my $key (keys %ledger_define) {
+	if ($math =~ s/\b$key\b/$ledger_define{$key}/) {
+	    print_warning_once "Directive `define` not supported by beancount: replacing $key with $ledger_define{$key}";
+	}
     }
 
     # We have to move the commodity from within the inline math construct
@@ -824,7 +874,7 @@ sub get_value_expr($) {
     # that's the commodity we need.  If there are multiple, beancount
     # can't handle it.
     my $terms = $math;
-    $terms =~ s/[.\d\(\)\*\/+-]/ /g;
+    $terms =~ s/[.,\s\d\(\)\*\/+-]/ /g;
     $terms =~ s/^\s+//;
     my @terms = uniq split /\s+/, $terms;
     if (scalar @terms == 0) {
@@ -835,8 +885,8 @@ sub get_value_expr($) {
 	print_warning_once("Complex inline math not supported in beancount: $math");
     }
     my $amount;
-    $amount->[NUMBER] = $math;
     $amount->[CURRENCY] = map_commodity $terms[0];
+    $amount->[NUMBER] = convert_number $math, $amount->[CURRENCY];
     return $amount, $rest;
 }
 
@@ -863,13 +913,8 @@ sub get_amount($) {
 	my $amount;
 	my $rest = $+{rest};
 	my $minus = $+{minus} ? "-" : "";
-	$amount->[NUMBER] = $+{number};
 	$amount->[CURRENCY] = map_commodity $+{currency};
-
-	if ($config->{decimal_comma}) {
-	    $amount->[NUMBER] =~ s/\.//g;
-	    $amount->[NUMBER] =~ tr/,/./; # issue #204
-	}
+	$amount->[NUMBER] = convert_number $+{number}, $amount->[CURRENCY];
 
 	# ledger allows amounts without a leading zero (e.g. .10) but
 	# beancount doesn't.
@@ -889,7 +934,7 @@ sub get_lot($) {
     my ($l) = @_;
     my $l_orig = $l;
 
-    my ($amount, $cost, $date);
+    my ($amount, $cost);
 
     # A lot can contain various information but pretty much everything
     # apart from the amount is optional.  The order is fixed, though:
@@ -927,7 +972,7 @@ sub get_lot($) {
     # A lot date: dates are always in square brackets [date]
     if ($l =~ /^\[(?<date>\d+[^ =\]]+)\]\s*(?<rest>.*)/) {
 	$l = $+{rest};
-	$date = pp_date $+{date}, 0;
+	$cost->[DATE] = pp_date $+{date}, 0;
     }
 
     # A lot note: (note).  Don't confuse with a ((lot value expression))
@@ -954,16 +999,13 @@ sub get_lot($) {
 	}
     }
 
-    # A date without a cost is not valid in beancount, so add the
-    # amount as the cost, which essentially means that the cost
+    # A date or note without a cost is not valid in beancount, so add
+    # the amount as the cost, which essentially means that the cost
     # is 1.00 of the currency.
-    if ($date) {
-	if (!defined $cost->[AMOUNT]) {
-	    $cost->[TYPE] = 2;
-	    $cost->[AMOUNT] = $amount;
-	}
-	$cost->[DATE] = $date;
-    }
+    if (defined $cost && !defined $cost->[AMOUNT]) {
+	$cost->[TYPE] = 2;
+	$cost->[AMOUNT] = $amount;
+     }
 
     return $amount, $cost, $l;
 }
@@ -1011,6 +1053,18 @@ sub parse_posting($) {
 
     # An assertion (if there's no amount) or balance assignment
     # (if there's no amount).  Starts with =
+    # Note that hledger also has =*, ==* and == assertions.
+    if ($config->{hledger}) {
+	if ($l =~ /^=?=\*\s*(.*)/) {
+	    print_warning_once "hledger's balance assertions for sub-accounts not supported";
+	    # Get amount to get the rest of the line in $l but ignore the
+	    # amount
+	    ($_, $l) = get_amount $1;
+	} elsif ($l =~ /^==\s*(.*)/) {
+	    print_warning_once "hledger's total balance assertions not supported; using regular assertion";
+	    ($posting->[ASSERTION]->[AMOUNT], $l) = get_amount $1;
+	}
+    }
     if ($l =~ /^=\s*(.*)/) {
 	($posting->[ASSERTION]->[AMOUNT], $l) = get_amount $1;
     }
@@ -1064,13 +1118,13 @@ sub process_txn(@) {
     foreach my $i (@txn_parsed) {
 	if ($i->[TYPE] == COMMENT) {
 	    # If there's a virtual posting that is ignored, we have to
-	    # discard the meta-data associated with the posting on
+	    # discard the metadata associated with the posting on
 	    # following lines (if there's any).  But there might be
 	    # comments worth preserving.  So just preserve all ledger
-	    # comments (i.e. comments and meta-data) as is.
+	    # comments (i.e. comments and metadata) as is.
 	    if ($skipped_posting) {
 		push_line $i->[DEPTH], $i->[COMMENT];
-		print_warning_once "Comment or meta-data on virtual posting preserved as comment";
+		print_warning_once "Comment or metadata on virtual posting preserved as comment";
 	    } else {
 		my $comment = handle_comment $i->[DEPTH], $i->[COMMENT], 0;
 		push_comment $i->[DEPTH], $comment if $comment;
@@ -1219,7 +1273,14 @@ sub process_txn(@) {
     }
     print_tags 2, @cur_txn_tags;
 
-    if ($total_postings == 1) {
+    if ($total_postings == 0) {
+	# hledger allows transactions without any postings.
+	# As it turns out, ledger doesn't complain about them either.
+	foreach (split "\n", pop_txn()) {
+	    print_comment_top_level 0, $_;
+	}
+	return;
+    } elsif ($total_postings == 1) {
 	if (defined $ledger_bucket) {
 	    # We only saw one posting and a ledger bucket is defined
 	    push_line 1, $ledger_bucket;
@@ -1248,7 +1309,7 @@ sub process_txn(@) {
 	# an implicit conversion.  Same if the currencies on both
 	# postings are the same.
 	if (!$postings[0]->[COST]->[AMOUNT] && !$postings[1]->[COST]->[AMOUNT] &&
-	    !$postings[0]->[PRICE]->[AMOUNT] && !$postings[0]->[PRICE]->[AMOUNT] &&
+	    !$postings[0]->[PRICE]->[AMOUNT] && !$postings[1]->[PRICE]->[AMOUNT] &&
 	    $postings[0]->[AMOUNT]->[CURRENCY] ne $postings[1]->[AMOUNT]->[CURRENCY]) {
 	    my $amount = pp_amount $postings[0]->[AMOUNT];
 	    my $price = pp_amount $postings[1]->[AMOUNT];
@@ -1269,6 +1330,12 @@ sub read_stanza($) {
     my ($input_ref) = @_;
 
     my @stanza = ();
+
+    # Check if input is empty
+    if (!@{$input_ref}) {
+	return @stanza;
+    }
+
     my $l;
     do {
 	$l = @{$input_ref}[0];
@@ -1330,7 +1397,17 @@ while (@input) {
 	    print_line $depth, $l;
 	}
     } elsif ($l =~ /^[!@]?(?<type>alias)\s+(?<account>$account_RE)\s*=\s*(?<val>.*)/) {  # alias
-	$ledger_alias{$+{account}} = map_account_apply $+{val};
+	my $account = $+{account};
+	my $value = $+{val};
+        if ($config->{hledger} && $account =~ m#^/(.*)/$#) {
+	    flush_cache('map_account');
+	    $account = "(?i)$1";
+	    $value =~ s/\\(\d+)/\$$1/g;
+	    $config->{account_regex}{$account} = $value;
+	    push @hledger_alias_regex, $account;
+	} else {
+	    $ledger_alias{$account} = map_account_apply $value;
+	}
     } elsif ($l =~ /^[!@]?apply\s+(?<type>account)\s+(?<val>.*)/) {  # apply account
 	$after_auto = 1;
 	push @ledger_apply, [$+{type}, $+{val}];
@@ -1366,6 +1443,13 @@ while (@input) {
 	# ledger seems to silently ignore all other apply statements
 	print_warning_once "Unknown '$1' directive found";
 	next;
+    } elsif ($l =~ /^!?end aliases/ && $config->{hledger}) {  # end aliases
+	%ledger_alias = ();
+	foreach (@hledger_alias_regex) {
+	    delete $config->{account_regex}{$_};
+	}
+	@hledger_alias_regex = [];
+	flush_cache('map_account');
     } elsif ($l =~ /^[!@]?end/) {  # end
 	next if !@ledger_apply; # end without any apply
 	my $a = pop @ledger_apply;
@@ -1396,9 +1480,13 @@ while (@input) {
 	    print_comment_top_level $depth, $l;
 	    $l = shift @input;
 	}
-    } elsif ($l =~ /^[!@]?(define|def)\s/) {  # define
-	print_warning_once "The `$1` directive is not supported";
-	print_comment_top_level 0, $l;
+    } elsif ($l =~ /^[!@]?(define|def)\s+([^=]+?)\s*=\s*(.*)/) {  # define
+	if (index($2, "(") == -1) {
+	    $ledger_define{$2} = $3;
+	} else {
+	    print_warning_once "Directive `$1` with function is not supported: $2";
+	    print_comment_top_level 0, $l;
+	}
     } elsif ($l =~ /^[!@]?(fixed|endfixed)/) {  # Fixated price
 	print_warning_once "Fixated prices are not supported";
 	print_comment_top_level 0, $l;
@@ -1410,7 +1498,9 @@ while (@input) {
 	$l = sprintf "%s price %s ", pp_date($+{date}, $year), map_commodity $+{commodity1};
 	my ($commodity2, $rest) = get_amount $+{commodity2};
 	$l .= pp_amount $commodity2;
-	if ($rest) {
+	if ($rest =~ /^\s*;/) {
+	    $l .= " " . $rest;
+	} elsif ($rest) {
 	    die "Unknown rest $rest in price directive: $l";
 	}
 	print_line $depth, $l;
@@ -1457,15 +1547,27 @@ while (@input) {
 	    }
 	}
     } elsif ($l =~ /^[!@]?commodity\s+(.*)/) {  # commodity declaration
-	my ($commodity, $comment);
-	$commodity = $1;
-	if ($commodity =~ /^(".*")(.*)/) {
-	    $commodity = $1;
-	    $comment = $1 if $2 =~ /\s*;\s*(.*)/;
+	$l = $1;
+	my $commodity;
+	my $comment = "";
+	if ($l =~ /^(?<commodity>$commodity_RE)\s*($comment_RE)?$/) {
+	    $commodity = map_commodity $+{commodity};
+	    $comment = " ; $+{comment}" if $+{comment};
+	} elsif ($config->{hledger}) {
+	    # In hledger, a commodity directive can contain an amount
+	    # where the amount defines the format for this commodity
+	    # instead of a separate format directive.
+	    my ($amount, $l) = get_amount $l;
+	    $commodity = $amount->[CURRENCY];
+	    $ledger_commodity_format{$commodity} = $amount->[NUMBER];
+	    if ($l =~ /^\s*$comment_RE/) {
+		$comment = " ; $+{comment}";
+            } elsif ($l) {
+		die "Unknown rest in commodity declaration for $commodity: $l";
+            }
 	} else {
-	    ($commodity, $comment) = split /\s*;\s*/, $commodity, 2;
+		die "Cannot parse commodity directive: $l";
 	}
-	$commodity = map_commodity $commodity;
 	@stanza = read_stanza \@input;
 	# Avoid duplicate commodity declarations if two commodities are
 	# mapped to the same commodity and both have commodity declarations.
@@ -1474,18 +1576,46 @@ while (@input) {
 	    next;
 	}
 	$commodity_declared{$commodity} = 1;
-	print_line $depth, sprintf "$config->{commodities_date} commodity %s%s", $commodity, $comment ? " ; $comment" : "";
+	print_line $depth, sprintf "$config->{commodities_date} commodity %s%s", $commodity, $comment;
 	foreach $l (@stanza) {
 	    ($depth, $l) = strip_indentation $l;
 	    if ($l =~ /^note\s+(.*)/) {  # note
 		print_line $depth, pp_metadata "name", mk_beancount_string $1;
 	    } elsif ($l =~ /^format\s+(.*)/) {  # format
-		next;  # skip directive, not needed in beancount
+	        my ($amount, $l) = get_amount $1;
+		$ledger_commodity_format{$amount->[CURRENCY]} = $amount->[NUMBER];
+		if ($l =~ /^\s*$comment_RE/) {
+		    # do nothing: we don't show format info in beancount,
+		    # so we can discard the comment
+		} elsif ($l) {
+		    die "Cannot parse commodity format information: $l";
+		}
 	    } elsif ($l =~ /^$metadata_RE/) {  # metadata
 		print_line $depth, pp_metadata $+{key}, mk_beancount_string $+{value};
 	    } else {
 		print_comment_top_level $depth, $l;
 	    }
+	}
+    } elsif ($l =~ /^[!@]?(D)\s*(.*)/) {
+	$after_auto = 1;
+
+	# Print a warning since beancount doesn't have such a directive,
+	# but process it anyway (although we only use the information
+	# for hledger at the moment).
+	print_warning_once "Unsupported directive `$1` skipped";
+	# Not supported in beancount
+	print_comment_top_level $depth, $l;
+
+	my ($amount, $l) = get_amount $2;
+	my $commodity = $amount->[CURRENCY];
+	if ($l =~ /^\s*$comment_RE/) {
+	    # do nothing: we don't show D directive in beancount,
+	    # so we can discard the comment
+	} elsif ($l) {
+	    die "Unknown rest in D directive for $commodity: $l";
+        }
+	if (!defined $ledger_commodity_format{$commodity}) {
+	    $ledger_commodity_format{$commodity} = $amount->[NUMBER];
 	}
     } elsif ($l =~ /^[!@]?(payee\s+.*)/) {  # payee declaration
 	print_comment_top_level $depth, $1;
@@ -1511,11 +1641,11 @@ while (@input) {
     } elsif ($l =~ /^[!@]?(tag\s+.*)/) {  # tag declaration
 	# Not needed in beancount and there's no equivalent
 	read_stanza \@input if $input[0] =~ /^\h+/;
-    } elsif ($l =~ /^[!@]?(N|D|C|I|i|O|o|b|h|assert|check|expr|eval|value)(\s|$)/) {
+    } elsif ($l =~ /^[!@]?(N|C|I|i|O|o|b|h|assert|check|expr|eval|value)(\s|$)/) {
 	$after_auto = 1;
-	    print_warning_once "Unsupported directive `$1` skipped";
-	    # Not supported in beancount
-	    print_comment_top_level $depth, $l;
+	print_warning_once "Unsupported directive `$1` skipped";
+	# Not supported in beancount
+	print_comment_top_level $depth, $l;
     } elsif ($l =~ /^[0-9]/) {
 	$after_auto = 1;
 	if ($l =~ /$txn_header_RE/) {  # txn header
@@ -1580,7 +1710,8 @@ while (@input) {
 # Check for renames
 foreach (sort keys %ledger_accounts) {
     my $map = map_account $_;
-    if ($_ ne $map && !($map ~~ [values %{$config->{account_map}}])) {
+    if ($_ ne $map && !($map ~~ [values %{$config->{account_map}}]) &&
+        !($map ~~ [values %account_regex_map])) {
         print_warning "Account $_ renamed to $map";
     }
 }
