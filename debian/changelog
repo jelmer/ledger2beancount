@@ -1,6 +1,7 @@
 ledger2beancount (2.4-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Drop patch disable-python.
 
  -- Jelmer Vernooĳ <jelmer@debian.org>  Sat, 29 Aug 2020 22:21:14 +0000
 
