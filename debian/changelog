@@ -1,9 +1,9 @@
-ledger2beancount (2.4-1) UNRELEASED; urgency=medium
+ledger2beancount (2.4-1) unstable; urgency=medium
 
   * New upstream release.
   * Drop patch disable-python, replace by 01_python3 migrating to Python 3.
 
- -- Jelmer Vernooĳ <jelmer@debian.org>  Thu, 03 Sep 2020 18:03:18 +0000
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Thu, 03 Sep 2020 18:11:57 +0000
 
 ledger2beancount (2.3-1) unstable; urgency=medium
 
